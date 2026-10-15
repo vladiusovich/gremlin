@@ -1,0 +1,10 @@
+# Personal settings profiles; only the template is shared
+env/*.env
+!env/example.env
+
+# Personal rule sets; only the examples are shared
+rules/*
+!rules/examples.json
+
+# Python bytecode
+__pycache__/

@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Status code with a JSON body (objects/arrays are serialized as JSON)",
+    "method": "GET",
+    "url": "https://api.example.com/v1/users/*",
+    "error": 404,
+    "body": { "code": "NOT_FOUND", "message": "User not found" }
+  },
+  {
+    "name": "Raw string body, sent as is with a custom Content-Type",
+    "method": "POST",
+    "url": "https://api.example.com/v1/orders",
+    "error": 500,
+    "content_type": "text/plain",
+    "body": "Internal Server Error"
+  },
+  {
+    "name": "No body: a default JSON body describing the mock is returned",
+    "method": "*",
+    "url": "https://api.example.com/v1/health",
+    "error": 503
+  },
+  {
+    "name": "Match by query parameters (url is then matched without the query string)",
+    "method": "DELETE",
+    "url": "https://api.example.com/v1/trade",
+    "query": { "Type": "Cancel", "ClientApp": "*" },
+    "error": 400,
+    "body": "\"Trade session is restricted\""
+  },
+  {
+    "name": "Extra response headers and a delay before responding",
+    "method": "GET",
+    "url": "https://api.example.com/v1/quotes*",
+    "error": 429,
+    "delay": 2,
+    "headers": { "Retry-After": "10" },
+    "body": { "message": "Too many requests" }
+  },
+  {
+    "name": "Hang for N seconds, then drop the connection",
+    "method": "GET",
+    "url": "https://api.example.com/v1/slow",
+    "error": "timeout",
+    "delay": 15
+  },
+  {
+    "name": "Drop the connection immediately (network error in the browser)",
+    "method": "*",
+    "url": "https://api.example.com/v1/unstable/*",
+    "error": "kill"
+  },
+  {
+    "name": "Without automatic CORS headers (to reproduce a CORS failure)",
+    "method": "GET",
+    "url": "https://api.example.com/v1/cors-test",
+    "error": 401,
+    "cors": false
+  },
+  {
+    "name": "Disabled rule: kept in the file but ignored",
+    "enabled": false,
+    "method": "*",
+    "url": "https://api.example.com/*",
+    "error": 500
+  }
+]
