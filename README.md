@@ -1,4 +1,6 @@
-# Errors Interceptor
+# Gremlin
+
+*Feed it rules, watch your API break.*
 
 A local tool for testing how the frontend handles API failures, **without touching the backend**: chosen requests get a fake error response (any status and body, a delay, a timeout or a dropped connection), everything else goes to the real server. Built on [mitmproxy](https://mitmproxy.org/), works with `localhost` and with real domains over HTTPS. Details: [How it works](#how-it-works).
 
@@ -48,7 +50,7 @@ The file name is the profile name: `env\staging.env` is the profile `staging`.
 
 ## 3. Create the rules file for the profile
 
-The profile and the rules file are linked **by the exact file name** in `MITM_RULES`: `MITM_RULES=rules/staging.json` means the file `rules\staging.json`. If the name does not match (a typo, a different extension), the script stops with `Rules file not found: …` and shows the path it looked for.
+The profile and the rules file are linked **by the exact file name** in `MITM_RULES`: `MITM_RULES=rules/staging.json` means the file `rules\staging.json`. If the name does not match (a typo, a different extension, `.json.txt`), the script stops with `Файл правил не найден: …` and shows the path it looked for.
 
 1. Open the `rules` folder.
 2. Create the file named exactly as in `MITM_RULES`, e.g. `staging.json`: *right click → New → Text Document*, then rename it including the extension.
@@ -97,7 +99,7 @@ Now do the action in the app (e.g. create an order) and check how the UI handles
 
 **To stop**: close the browser window, then press `Ctrl+C` in the proxy window (or just close it).
 
-**To switch to another profile**: stop first (close **both** windows), then run the other profile. If the proxy window of the previous profile is still open on the same port, the new run reuses that proxy, and with it the **previous profile's rules** (the console says `Proxy is already listening on port …`).
+**To switch to another profile**: stop first (close **both** windows), then run the other profile. If the proxy window of the previous profile is still open on the same port, the new run reuses that proxy, and with it the **previous profile's rules** (the console says `Прокси уже слушает порт …`).
 
 ## Several profiles and rule sets
 
@@ -262,10 +264,10 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | Mocked response visible in the proxy log, but the app gets `TypeError: Failed to fetch` | CORS: make sure `cors` is not `false` |
 | Rules file changes are ignored | The JSON is invalid; the proxy log shows `invalid JSON` with the line and column, and the previous rules stay active. See [Validation and log messages](#validation-and-log-messages) |
 | A rule is missing from `Loaded N rule(s)` | It is invalid and was skipped; the reason is logged just above the summary |
-| `mitmdump not found` | Run `install.bat` |
-| `Profile not found: env\<name>.env` | The `-e` name must match a file in `env/` (without `.env`) |
-| `[warn] … unknown key "…" skipped` | A typo in a profile key, or spaces around `=`. The message lists the allowed keys |
-| `[!!] Invalid port / Invalid value / Invalid URL / Browser … not found` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
+| `mitmdump не найден` | Run `install.bat` |
+| `Профиль не найден: env\<name>.env` | The `-e` name must match a file in `env/` (without `.env`) |
+| `[warn] … неизвестный ключ "…" пропущен` | A typo in a profile key, or spaces around `=`. The message lists the allowed keys |
+| `[!!] Неверный порт / Неверное значение / Неверный URL / Браузер … не найден` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
 | Proxy window shows `address already in use` | The port is taken; set another `MITM_PORT` or use `-p` |
 | mitmweb UI does not open / port conflict | mitmweb uses port `8081` for its UI; do not run the proxy itself on `8081` together with `MITM_WEB=1` / `-w` |
 
@@ -309,9 +311,10 @@ When the app and its API are on different origins, the real server adds `Access-
 ## Project structure
 
 ```text
-errors_interseptor/
+gremlin/
 ├── README.md
 ├── .gitignore           # keeps personal env profiles and rule sets out of git
+├── .gitattributes       # keeps CRLF line endings in *.bat
 ├── install.bat          # install mitmproxy and trust its certificate
 ├── start_proxy.bat      # run the proxy with all addons (current console)
 ├── run_browser.bat      # start the proxy if needed + open a browser through it

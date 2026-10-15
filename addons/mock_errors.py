@@ -1,5 +1,5 @@
 """
-mitmproxy addon: replaces responses with errors by method + URL, rules live in a JSON file.
+Gremlin's mitmproxy addon: replaces responses with errors by method + URL, rules live in a JSON file.
 
 Run:
   start_proxy.bat
