@@ -8,3 +8,7 @@ rules/*
 
 # Python bytecode
 __pycache__/
+
+# Test environment
+.venv/
+.pytest_cache/

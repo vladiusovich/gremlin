@@ -10,7 +10,7 @@ A local tool for testing how the frontend handles API failures, **without touchi
 - [4. Run](#4-run)
 - [Several profiles and rule sets](#several-profiles-and-rule-sets)
 - Reference: [Settings profiles](#settings-profiles) · [Command-line options](#command-line-options) · [Rules](#rules) · [Troubleshooting](#troubleshooting)
-- Background: [How it works](#how-it-works) · [Project structure](#project-structure) · [Extending](#extending) · [Uninstall](#uninstall)
+- Background: [How it works](#how-it-works) · [Project structure](#project-structure) · [Extending](#extending) · [Tests](#tests) · [Uninstall](#uninstall)
 
 ## 1. Install
 
@@ -318,6 +318,10 @@ gremlin/
 ├── install.bat          # install mitmproxy and trust its certificate
 ├── start_proxy.bat      # run the proxy with all addons (current console)
 ├── run_browser.bat      # start the proxy if needed + open a browser through it
+├── run_tests.bat        # run the tests in .venv (see Tests)
+├── requirements-dev.txt # test dependencies
+├── pytest.ini
+├── tests/               # pytest suite
 ├── addons/              # mitmproxy addons, all *.py are loaded automatically
 │   └── mock_errors.py   # rule-based error mocking
 ├── rules/               # rule sets for mock_errors.py
@@ -332,7 +336,7 @@ gremlin/
     └── validate.bat     # checks port and boolean values
 ```
 
-Only `README.md`, `.gitignore`, the scripts, `addons/`, `lib/`, `rules/examples.json` and `env/example.env` are in git.
+Only `README.md`, `.gitignore`, the scripts, `addons/`, `lib/`, `tests/`, `rules/examples.json` and `env/example.env` are in git.
 
 ## Extending
 
@@ -343,6 +347,34 @@ Only `README.md`, `.gitignore`, the scripts, `addons/`, `lib/`, `rules/examples.
 - **New rule field**: add it to `REQUIRED_FIELDS` or `OPTIONAL_FIELDS` and validate it in `parse_rule()` in `addons/mock_errors.py`, then document it in [Rules](#rules).
 - **New interception logic** (rewriting responses, logging, injecting headers, …): drop a new [mitmproxy addon](https://docs.mitmproxy.org/stable/addons-overview/) into `addons/`. It is picked up on the next proxy start. Prefix shared helper modules with `_` so they are not loaded as addons. If the addon needs its own options, register them in `load()` (like `rules_file` in `mock_errors.py`) and pass values through `--set` in `start_proxy.bat`.
 - **Another browser**: set `MITM_BROWSER` (or `-b`) to the full path of its exe (Chromium-based browsers only, because the flags are Chromium flags).
+
+## Tests
+
+Requires Python 3.10+. The first run creates `.venv` in the project folder and installs mitmproxy, pytest and pytest-asyncio into it (the proxy itself keeps using the mitmproxy from `install.bat`).
+
+Run it from a console in the project folder (in PowerShell, e.g. the VS Code terminal, prefix it with `.\`: `.\run_tests.bat`):
+
+```bat
+run_tests.bat                          :: everything, ~30 s
+run_tests.bat -m "not e2e"             :: without starting a real mitmdump, ~20 s
+run_tests.bat -k cors -v               :: only tests with "cors" in the name
+run_tests.bat tests\test_mocking.py    :: one file
+run_tests.bat -x                       :: stop at the first failure
+```
+
+Any arguments are passed to pytest as is. Once `.venv` exists, `.venv\Scripts\python -m pytest` works too.
+
+The run ends with a summary such as `163 passed in 33.10s`. On a failure pytest prints the test name and the values that did not match, and `run_tests.bat` exits with a non-zero code.
+
+| File | What it checks |
+| --- | --- |
+| `tests/test_parse_rule.py` | Validation of a single rule: required fields, types, ranges, defaults, warnings for typos and fields without effect |
+| `tests/test_rules_file.py` | Loading the rules file: invalid JSON / root keeps the previous rules, invalid rules are skipped, `enabled`, duplicates, hot reload, missing file, BOM, warnings instead of errors during startup |
+| `tests/test_mocking.py` | Matching (`url` wildcards, `method`, `query`, first match wins) and the mocked response (status, body, `content_type`, `headers`, CORS, `delay`, `timeout`, `kill`, passing through on a failure) |
+| `tests/test_e2e.py` | A real mitmdump with the addon between an HTTP client and a local server: passthrough, mock without reaching the server, kill, timeout, delay, hot reload, broken rules do not stop the proxy |
+| `tests/test_scripts.py` | `start_proxy.bat` and `run_browser.bat` via `--dry-run` in a temp copy of the project: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery |
+
+When adding a rule field or a profile key, add a test next to the existing ones for that layer.
 
 ## Uninstall
 
