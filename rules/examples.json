@@ -1,67 +1,259 @@
 [
   {
+    "comment": [
+      "Two kinds of rules, they cannot be mixed in one rule:",
+      "  'mock'                  - the proxy answers by itself, the request NEVER reaches the server;",
+      "  'request' / 'response'  - the request DOES reach the server, the request and/or the real answer are changed.",
+      "A rule with 'mock' and 'request' or 'response' together is an error and is skipped."
+    ]
+  },
+  {
+    "comment": "=== 1. Mock the response ('mock'): the request never reaches the server ==="
+  },
+  {
     "name": "Status code with a JSON body (objects/arrays are serialized as JSON)",
     "method": "GET",
     "url": "https://api.example.com/v1/users/*",
-    "error": 404,
-    "body": { "code": "NOT_FOUND", "message": "User not found" }
+    "mock": {
+      "status": 404,
+      "body": { "code": "NOT_FOUND", "message": "User not found" }
+    }
   },
   {
     "name": "Raw string body, sent as is with a custom Content-Type",
     "method": "POST",
     "url": "https://api.example.com/v1/orders",
-    "error": 500,
-    "content_type": "text/plain",
-    "body": "Internal Server Error"
+    "mock": {
+      "status": 500,
+      "content_type": "text/plain",
+      "body": "Internal Server Error"
+    }
   },
   {
     "name": "No body: a default JSON body describing the mock is returned",
     "method": "*",
     "url": "https://api.example.com/v1/health",
-    "error": 503
+    "mock": { "status": 503 }
   },
   {
     "name": "Match by query parameters (url is then matched without the query string)",
     "method": "DELETE",
     "url": "https://api.example.com/v1/trade",
     "query": { "Type": "Cancel", "ClientApp": "*" },
-    "error": 400,
-    "body": "\"Trade session is restricted\""
+    "mock": {
+      "status": 400,
+      "body": "\"Trade session is restricted\""
+    }
   },
   {
     "name": "Extra response headers and a delay before responding",
     "method": "GET",
     "url": "https://api.example.com/v1/quotes*",
-    "error": 429,
-    "delay": 2,
-    "headers": { "Retry-After": "10" },
-    "body": { "message": "Too many requests" }
+    "mock": {
+      "status": 429,
+      "delay": 2,
+      "headers": { "Retry-After": "10" },
+      "body": { "message": "Too many requests" }
+    }
   },
   {
     "name": "Hang for N seconds, then drop the connection",
     "method": "GET",
     "url": "https://api.example.com/v1/slow",
-    "error": "timeout",
-    "delay": 15
+    "mock": { "status": "timeout", "delay": 15 }
   },
   {
     "name": "Drop the connection immediately (network error in the browser)",
     "method": "*",
     "url": "https://api.example.com/v1/unstable/*",
-    "error": "kill"
+    "mock": { "status": "kill" }
   },
   {
     "name": "Without automatic CORS headers (to reproduce a CORS failure)",
     "method": "GET",
     "url": "https://api.example.com/v1/cors-test",
-    "error": 401,
-    "cors": false
+    "mock": { "status": 401, "cors": false }
+  },
+
+  {
+    "comment": "=== 2. Change the request ('request'): the changed request goes to the real server ==="
+  },
+  {
+    "name": "Request: change fields of the JSON body (null removes a field, nested objects are merged)",
+    "method": "POST",
+    "url": "https://api.example.com/v1/withdrawals",
+    "request": {
+      "json": { "amount": -100, "symbol": "XXXYYY", "meta": { "source": null } }
+    }
+  },
+  {
+    "name": "Request: replace the whole body",
+    "method": "PUT",
+    "url": "https://api.example.com/v1/profile",
+    "request": {
+      "body": { "email": "not-an-email", "phone": "" }
+    }
+  },
+  {
+    "name": "Request: set, change and remove query parameters",
+    "method": "GET",
+    "url": "https://api.example.com/v1/history*",
+    "request": {
+      "query": { "pageSize": 100000, "from": "2099-01-01", "debug": null }
+    }
+  },
+  {
+    "name": "Request: headers (null removes one, e.g. log out a single request)",
+    "method": "*",
+    "url": "https://api.example.com/v1/me*",
+    "request": {
+      "headers": { "Authorization": null, "X-Client-Version": "0.0.1", "Accept-Language": "xx" }
+    }
+  },
+  {
+    "name": "Request: fields of an HTML form (application/x-www-form-urlencoded)",
+    "method": "POST",
+    "url": "https://auth.example.com/login",
+    "request": {
+      "form": { "username": "' OR 1=1 --", "remember": null }
+    }
+  },
+  {
+    "name": "Request: find and replace in any body (plain text: no special characters)",
+    "method": "POST",
+    "url": "https://api.example.com/graphql",
+    "request": {
+      "replace": { "from": "first: 20", "to": "first: 0" }
+    }
+  },
+  {
+    "name": "Request: several replacements, a regular expression with a group",
+    "method": "POST",
+    "url": "https://api.example.com/v1/cart",
+    "request": {
+      "replace": [
+        { "from": "\"qty\":\\s*(\\d+)", "to": "\"qty\": -\\1", "regex": true },
+        { "from": "USD", "to": "XXX" }
+      ]
+    }
+  },
+  {
+    "name": "Request: change the method",
+    "method": "POST",
+    "url": "https://api.example.com/v1/orders/*/cancel",
+    "request": {
+      "method": "DELETE"
+    }
+  },
+  {
+    "name": "Request: send to another address (other stand, API version, local backend)",
+    "method": "*",
+    "url": "https://api.example.com/v1/charts/*",
+    "request": {
+      "url": "http://localhost:5000/v2/charts"
+    }
+  },
+  {
+    "name": "Request: hold it before sending to the server",
+    "method": "POST",
+    "url": "https://api.example.com/v1/payments",
+    "request": {
+      "delay": 5
+    }
+  },
+
+  {
+    "comment": "=== 3. Change the real response ('response'): the server answers, the app gets a changed answer ==="
+  },
+  {
+    "name": "Response: change fields of the real JSON",
+    "method": "GET",
+    "url": "https://api.example.com/v1/account",
+    "response": {
+      "json": { "balance": 0, "flags": { "tradingAllowed": false, "beta": null } }
+    }
+  },
+  {
+    "name": "Response: real body, different status",
+    "method": "GET",
+    "url": "https://api.example.com/v1/positions",
+    "response": {
+      "status": 500
+    }
+  },
+  {
+    "name": "Response: replace the whole body (the real headers stay)",
+    "method": "GET",
+    "url": "https://api.example.com/v1/news",
+    "response": {
+      "body": []
+    }
+  },
+  {
+    "name": "Response: find and replace in the body",
+    "method": "GET",
+    "url": "https://api.example.com/v1/instruments",
+    "response": {
+      "replace": [
+        { "from": "\"status\":\"Open\"", "to": "\"status\":\"Closed\"" },
+        { "from": "\"price\":\\s*[0-9.]+", "to": "\"price\": 0", "regex": true }
+      ]
+    }
+  },
+  {
+    "name": "Response: headers (disable caching, add a header)",
+    "method": "GET",
+    "url": "https://cdn.example.com/config.json",
+    "response": {
+      "headers": { "Cache-Control": "no-store", "ETag": null, "Retry-After": "30" }
+    }
+  },
+  {
+    "name": "Response: slow real server",
+    "method": "GET",
+    "url": "https://api.example.com/v1/reports/*",
+    "response": {
+      "delay": 8
+    }
+  },
+
+  {
+    "comment": "=== 4. Request and response together: one real call to the server, both ends changed ==="
+  },
+  {
+    "name": "Expired session: drop the token, show what the app gets on 401",
+    "method": "*",
+    "url": "https://api.example.com/v1/trade*",
+    "request": {
+      "headers": { "Authorization": "Bearer expired" }
+    },
+    "response": {
+      "status": 401,
+      "json": { "code": "SESSION_EXPIRED" }
+    }
+  },
+  {
+    "name": "Order with a huge amount, and the server reply is slowed down",
+    "method": "POST",
+    "url": "https://api.example.com/v1/orders",
+    "query": { "type": "market" },
+    "request": {
+      "json": { "amount": 999999999 },
+      "delay": 1
+    },
+    "response": {
+      "delay": 3
+    }
+  },
+
+  {
+    "comment": "=== 5. Service ==="
   },
   {
     "name": "Disabled rule: kept in the file but ignored",
     "enabled": false,
     "method": "*",
     "url": "https://api.example.com/*",
-    "error": 500
+    "mock": { "status": 500 }
   }
 ]

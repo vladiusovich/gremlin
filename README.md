@@ -2,7 +2,13 @@
 
 *Feed it rules, watch your API break.*
 
-A local tool for testing how the frontend handles API failures, **without touching the backend**: chosen requests get a fake error response (any status and body, a delay, a timeout or a dropped connection), everything else goes to the real server. Built on [mitmproxy](https://mitmproxy.org/), works with `localhost` and with real domains over HTTPS, in a browser, in API clients (curl, Postman) and in mobile apps on a phone. Details: [How it works](#how-it-works).
+A local tool for testing how the frontend handles API failures and unusual data, **without touching the backend**. For chosen requests it can:
+
+- **mock the response**: any status and body, a delay, a timeout or a dropped connection; the request never reaches the server;
+- **change the request** before it reaches the server: JSON fields, query parameters, headers, form fields, the whole body, the method or the URL. Good for cases the UI does not let you produce, such as a negative amount, a missing field or an expired token;
+- **change the real response** before it reaches the app: the status, JSON fields, headers, the body, a delay.
+
+Everything else goes to the real server untouched. Built on [mitmproxy](https://mitmproxy.org/), works with `localhost` and with real domains over HTTPS, in a browser, in API clients (curl, Postman) and in mobile apps on a phone. Details: [How it works](#how-it-works).
 
 - [1. Install](#1-install)
 - [2. Create a profile](#2-create-a-profile)
@@ -56,7 +62,7 @@ The profile and the rules file are linked **by the exact file name** in `MITM_RU
 
 1. Open the `rules` folder.
 2. Create the file named exactly as in `MITM_RULES`, e.g. `staging.json`: *right click → New → Text Document*, then rename it including the extension.
-3. Open it in Notepad and describe the requests to break. A file with one rule:
+3. Open it in Notepad and describe the requests to intercept. A file with one rule:
 
    ```json
    [
@@ -64,7 +70,7 @@ The profile and the rules file are linked **by the exact file name** in `MITM_RU
        "name": "Order creation fails",
        "method": "POST",
        "url": "https://api.staging.example.com/v1/orders",
-       "error": 500
+       "mock": { "status": 500 }
      }
    ]
    ```
@@ -72,9 +78,30 @@ The profile and the rules file are linked **by the exact file name** in `MITM_RU
    - `name`: any label, it is shown in the proxy log;
    - `method`: the request method, as in DevTools (`GET`, `POST`, …); remove the line to match any method;
    - `url`: the request address, copied from DevTools → *Network* (right click on the request → *Copy → Copy URL*). `*` matches anything, e.g. `https://api.staging.example.com/v1/orders/*`;
-   - `error`: the HTTP status to return, or `"timeout"` / `"kill"` to simulate a hang or a network failure.
+   - `mock`: answer instead of the server: `status` is the HTTP status to return, or `"timeout"` / `"kill"` to simulate a hang or a network failure. The request **never reaches the server**.
 
-   Several rules are separated by commas: `[ { … }, { … } ]`. Ready-made rules for every case (custom error text, delays, timeouts, query parameters, …) are in [`rules/examples.json`](rules/examples.json): copy the ones you need. All fields: [Rules](#rules).
+   Instead of `mock`, a rule can let the request **reach the server** and change the request and/or the real response:
+
+   ```json
+   [
+     {
+       "name": "Order with a negative amount: does the server reject it?",
+       "method": "POST",
+       "url": "https://api.staging.example.com/v1/orders",
+       "request": { "json": { "amount": -100 } }
+     },
+     {
+       "name": "Real account, but zero balance",
+       "method": "GET",
+       "url": "https://api.staging.example.com/v1/account",
+       "response": { "json": { "balance": 0 } }
+     }
+   ]
+   ```
+
+   > ⚠️ `mock` and `request` / `response` cannot be in one rule: with `mock` the request is never sent, so there is nothing to change. Such a rule is skipped, and the proxy window says why. `request` and `response` together are fine.
+
+   Several rules are separated by commas: `[ { … }, { … } ]`. Every option with examples is described in [`rules/README.md`](rules/README.md); ready-made rules for every case are in [`rules/examples.json`](rules/examples.json): copy the ones you need. Short reference: [Rules](#rules).
 
 4. Save the file.
 
@@ -96,7 +123,7 @@ For the `default` profile it is just `gremlin run`.
 
 Two windows open:
 
-- **`mitmproxy :8080`**, the proxy window with the log. Check its first lines: `Loaded 1 rule(s) from …\rules\staging.json` confirms that the right rules file is used. Every broken request appears here as `MOCK 500 POST https://…  [rule #1 "Order creation fails"]`.
+- **`mitmproxy :8080`**, the proxy window with the log. Check its first lines: `Loaded 1 rule(s) from …\rules\staging.json` confirms that the right rules file is used. Every intercepted request appears here as `MOCK 500 POST https://…  [rule #1 "Order creation fails"]` (or `MODIFY REQ …` / `MODIFY RESP …` for rules that change the request or the response).
 - **A separate browser window** with the site from `MITM_URL`. Only this window goes through the proxy; your regular browser works as usual. Test in this window.
 
 Now do the action in the app (e.g. create an order) and check how the UI handles the error.
@@ -343,26 +370,60 @@ No options. Steps:
 
 ## Rules
 
-A rules file is a JSON array. For each request the rules are checked top to bottom, and the **first match wins**. Only `url` and `error` are required; everything else is optional.
+A short reference. **The full guide with an example for every option is [`rules/README.md`](rules/README.md).**
 
-| Field | Required | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `url` | **required** | string | | URL pattern: scheme, host, **port**, path. `*` matches any characters, `?` matches any single character. Without `query` it is matched against the full URL, including the query string |
-| `error` | **required** | number or string | | HTTP status `100`-`599` as a number (`500`, not `"500"`), `"timeout"` (hang for `delay` seconds, then drop the connection) or `"kill"` (drop the connection immediately) |
-| `method` | optional | string | `"*"` | `GET`, `POST`, `PUT`, `DELETE`, … (case-insensitive) or `*` for any |
-| `query` | optional | object | not checked | Query parameters that must be present, e.g. `{"Type": "Cancel"}`. Values are strings or numbers and support `*`. With `query` set, `url` is matched **without** the query string, and parameter order does not matter |
-| `body` | optional | any | generated JSON | Object or array: sent as JSON. String: sent as is (wrap it in `\"…\"` if the client expects a JSON string). Omitted or `null`: a JSON body describing the mock |
-| `content_type` | optional | string | `"application/json"` | `Content-Type` of the response |
-| `headers` | optional | object | none | Extra response headers, e.g. `{"Retry-After": "10"}`; values are strings or numbers |
-| `delay` | optional | number | `0` (`30` for `"timeout"`) | Seconds (`>= 0`, fractions allowed) to wait before responding |
-| `cors` | optional | boolean | `true` | Add `Access-Control-Allow-*` headers for the request's `Origin` (see [Why CORS headers](#why-cors-headers)). Set to `false` to reproduce a CORS failure |
-| `enabled` | optional | boolean | `true` | `false` keeps the rule in the file but skips it (without validating it) |
-| `name` | optional | string | | Label shown in the proxy log: `rule #3 "Trade session closed"` |
-| `comment` | optional | any | | Free text, ignored |
+A rules file is a JSON array. For each request the rules are checked top to bottom, and the **first match wins**. A rule picks requests by `url` (required), `method` and `query`, and does **one of two things**:
 
-With `"error": "kill"` or `"timeout"` no response is sent, so `body`, `content_type`, `headers` and `cors` have no effect (and `delay` neither for `kill`).
+| Kind | Fields | The request reaches the server? | What it does |
+| --- | --- | --- | --- |
+| Fake answer | `mock` | ❌ **No** | The proxy answers by itself: `status` (or `"timeout"` / `"kill"`), `body`, `content_type`, `headers`, `delay`, `cors` |
+| Real call, changed | `request` and/or `response` | ✅ **Yes** | `request` changes what is sent: `json`, `body`, `query`, `headers`, `form`, `replace`, `method`, `url`, `delay`. `response` changes the real answer: `status`, `json`, `body`, `replace`, `headers`, `delay` |
 
-Rule files in `rules/` are **personal** and ignored by git. The only shared file is [`rules/examples.json`](rules/examples.json), a reference with a working example of every feature.
+> ⚠️ **`mock` cannot be combined with `request` or `response`**: with `mock` the request is never sent, so there is no request and no real answer to change. Such a rule is **an error and is skipped**, with the reason in the proxy window. `request` and `response` together are fine: they are the two ends of one real call. Details: [Two kinds of rules](rules/README.md#two-kinds-of-rules).
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `url` | string | **required** | URL pattern: scheme, host, **port**, path. `*` matches any characters, `?` matches any single character. Without `query` it is matched against the full URL, including the query string |
+| `method` | string | `"*"` | `GET`, `POST`, `PUT`, `DELETE`, … (case-insensitive) or `*` for any |
+| `query` | object | not checked | Query parameters that must be present, e.g. `{"Type": "Cancel"}`. Values are strings or numbers and support `*`. With `query` set, `url` is matched **without** the query string, and parameter order does not matter |
+| `mock` | object | | Answer instead of the server, see the table below and [Mocking the response](rules/README.md#mocking-the-response-mock) |
+| `request` | object | | Changes to the request before it is sent, see [Changing the request](rules/README.md#changing-the-request-request) |
+| `response` | object | | Changes to the real response, see [Changing the response](rules/README.md#changing-the-response-response) |
+| `enabled` | boolean | `true` | `false` keeps the rule in the file but skips it (without validating it) |
+| `name` | string | | Label shown in the proxy log: `rule #3 "Trade session closed"` |
+| `comment` | any | | Free text, ignored. An entry with only `comment` is a note between rules |
+
+Fields of `mock`:
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `status` | number or string | **required** | HTTP status `100`-`599` as a number (`500`, not `"500"`), `"timeout"` (hang for `delay` seconds, then drop the connection) or `"kill"` (drop the connection immediately) |
+| `body` | any | generated JSON | Object or array: sent as JSON. String: sent as is (wrap it in `\"…\"` if the client expects a JSON string). Omitted or `null`: a JSON body describing the mock |
+| `content_type` | string | `"application/json"` | `Content-Type` of the response |
+| `headers` | object | none | Response headers, e.g. `{"Retry-After": "10"}`; values are strings or numbers |
+| `delay` | number | `0` (`30` for `"timeout"`) | Seconds (`>= 0`, fractions allowed) to wait before responding |
+| `cors` | boolean | `true` | Add `Access-Control-Allow-*` headers for the request's `Origin` (see [Why CORS headers](#why-cors-headers)). Set to `false` to reproduce a CORS failure |
+
+With `"status": "kill"` or `"timeout"` no response is sent, so `body`, `content_type`, `headers` and `cors` have no effect (and `delay` neither for `kill`).
+
+Changes inside `request` and `response` (`null` removes a field, a parameter or a header everywhere):
+
+| Change | `request` | `response` | Example |
+| --- | --- | --- | --- |
+| `json` | ✅ | ✅ | `{"amount": -1, "meta": {"source": null}}`: merged into the JSON body |
+| `body` | ✅ | ✅ | `{"items": []}` or `"raw text"`: replaces the whole body |
+| `replace` | ✅ | ✅ | `{"from": "Open", "to": "Closed"}`, or a list; `"regex": true` for regular expressions |
+| `headers` | ✅ | ✅ | `{"Authorization": null, "X-Client-Version": "0.0.1"}` |
+| `delay` | ✅ | ✅ | `5`: seconds before sending the request / returning the response |
+| `query` | ✅ | | `{"pageSize": 100000, "debug": null}` |
+| `form` | ✅ | | `{"amount": "-1"}`: fields of an `application/x-www-form-urlencoded` body |
+| `method` | ✅ | | `"DELETE"` |
+| `url` | ✅ | | `"http://localhost:5000/v2/quotes"`: send the request elsewhere |
+| `status` | | ✅ | `401`: the body stays real (the server **has** processed the request) |
+
+**The old format.** Rules written before `mock` existed (`"error": 500, "body": …` at the top level of a rule) still work, but the proxy window prints a warning with the exact `"mock": {…}` to write instead. See [The old format](rules/README.md#the-old-format-error).
+
+Rule files in `rules/` are **personal** and ignored by git. The shared files are [`rules/README.md`](rules/README.md), the guide, and [`rules/examples.json`](rules/examples.json), a working example of every feature.
 
 ### Tips
 
@@ -370,6 +431,7 @@ Rule files in `rules/` are **personal** and ignored by git. The only shared file
 - `?` in a pattern is a wildcard. To match a query string reliably, use the `query` field instead of putting `?a=b` in `url`.
 - Keep scenarios in separate files (`rules/trade-errors.json`, `rules/auth-errors.json`, …) and switch between them with `MITM_RULES` in a profile or `-r`.
 - To turn a rule off temporarily, set `"enabled": false` instead of deleting it.
+- To check what the server actually received after a `request` change, run with `-w` and open the request in mitmweb: it shows the changed request.
 
 ### Validation and log messages
 
@@ -379,11 +441,22 @@ The rules file is validated every time it is (re)loaded, and the result is print
 | --- | --- | --- |
 | Invalid JSON | The whole file is rejected, **the previous rules stay active** | `rules.json:4:17: invalid JSON: Expecting ',' delimiter. Keeping the previous 3 rule(s).` |
 | The root is not an array | Same as invalid JSON | `rules.json: the root must be a JSON array [ ... ] of rules, got object. …` |
-| A rule is invalid (missing required field, wrong type, out of range) | **Only that rule is skipped**, the others are loaded. All problems of the rule are listed, each naming the field and whether it is required or optional | `rules.json: rule #2 "typo": field 'error' (required) is missing: HTTP status 100-599, "timeout" or "kill"` |
+| A rule is invalid (missing required field, wrong type, out of range, nothing to do, `mock` together with `request` / `response`) | **Only that rule is skipped**, the others are loaded. All problems of the rule are listed, each naming the field and whether it is required or optional | `rules.json: rule #2 "typo": field 'request.json' (optional): expected an object like {"amount": -1} …` |
+| `mock` together with `request` / `response` | The rule is skipped, the message explains why the two cannot be combined | `rules.json: rule #3: incompatible: 'mock' cannot be used together with 'response' in one rule. 'mock' answers instead of the server, so the request is never sent, while 'response' changes the answer that comes back from the server. Keep either 'mock' or 'response'` |
+| The old format (`"error"` at the top level) | Warning with the exact replacement, the rule works | `rules.json: rule #1: old format: 'error', 'body' at the top level still works, but write it as "mock": {"status": 404, "body": {…}}` |
 | Unknown field (typo) | Warning with a suggestion, the field is ignored, the rule is loaded | `rules.json: rule #2: unknown field 'metod' is ignored, did you mean 'method'?` |
 | A rule that can never match or has fields without effect | Warning, the rule is loaded | `rules.json: rule #7 "dup": same method/url/query as rule #1 "ok", it will never match (first match wins)` |
 | The file is missing | Error once, nothing is mocked until the file appears | `Rules file not found: …` |
-| A failure while mocking a request | Error with a traceback; the request is passed through to the real server | `rule #3: failed to mock GET https://…, passing the request through` |
+| A change that does not fit the body (e.g. `json` on a non-JSON body) | Warning, that change is skipped, the other changes are applied | `rule #4: request: 'json' skipped: the body is not JSON (use 'replace' or 'body' instead)` |
+| A failure while mocking or changing a request | Error with a traceback; the request (or response) goes on as is | `rule #3: failed to mock GET https://…, passing the request through` |
+
+What each intercepted request looks like in the log:
+
+```text
+MOCK 500 POST https://…/v1/orders  [rule #1 "Order fails"]
+MODIFY REQ POST https://…/v1/orders  [rule #2 "Negative amount"]: json, headers
+MODIFY RESP 200 -> 401 GET https://…/v1/trade  [rule #3]: status, json
+```
 
 Every load ends with a summary such as `Loaded 5 rule(s) from …, 1 disabled, 2 invalid skipped (see errors above)`.
 
@@ -426,17 +499,20 @@ Typical uses:
 - check that the UI shows the right message for a specific backend error (`402 Trade session is closed`, `489 Close-only mode`, …);
 - reproduce rare or hard-to-trigger errors on demand;
 - test loading states, retries and timeouts (`delay`, `timeout`);
-- test behaviour on network failures (`kill`).
+- test behaviour on network failures (`kill`);
+- send values the UI does not allow (negative amounts, missing fields, broken tokens) and check how the server and the UI react (`request`);
+- show the UI real data with one field changed: a zero balance, a closed market, a feature flag off, an empty list (`response`).
 
 ```text
  Browser (dedicated profile)
         │  all traffic, including localhost
         ▼
  mitmproxy 127.0.0.1:8080 ── addons/mock_errors.py ── rules/rules.json
-        │                          │
-        │ no rule matched          │ rule matched
-        ▼                          ▼
-   real server               mocked error response
+        │                │                         │
+        │ no rule        │ "mock"                  │ "request" / "response"
+        ▼                ▼                         ▼
+   real server     mocked response       changed request ──► real server
+                   (server not asked)    changed response ◄──┘
 ```
 
 1. `gremlin run` reads the profile, starts `gremlin proxy run` in a separate window if nothing listens on the port yet, and waits for the proxy to come up.
@@ -448,7 +524,7 @@ Typical uses:
 
    The separate profile is required: if the regular browser is already open, a new launch only opens a tab in it and ignores the flags. It also keeps your main profile clean. Cookies and logins in the dedicated profile survive between runs; each browser and port pair has its own profile, so several setups can run side by side.
 4. For HTTPS, mitmproxy decrypts the traffic with its own certificate, which is why `gremlin install` makes Windows trust it.
-5. For every request `mock_errors.py` checks the rules top to bottom; the first match produces a fake response (or a delay/timeout/dropped connection) and the request never reaches the server. Requests without a match pass through unchanged.
+5. For every request `mock_errors.py` checks the rules top to bottom, and the first match decides. With `mock` it produces a fake response (or a delay/timeout/dropped connection), and the request never reaches the server. With `request` it changes the request and sends it on; with `response` it remembers the rule and changes the server's answer when it arrives (the `response` hook of mitmproxy). Compressed bodies are decompressed and compressed back, `Content-Length` is updated. Requests without a match pass through unchanged.
 6. For phones, `gremlin phone run` starts mitmproxy with two modes: `--mode regular` (the usual proxy on `MITM_PORT`) and `--mode wireguard@51820`. The phone's WireGuard app sends all its traffic to the computer through an encrypted UDP tunnel, mitmproxy takes it out of the tunnel and handles it like any other request. The phone needs nothing else configured, and apps that ignore the system proxy are covered too.
 
 ### Why CORS headers
@@ -473,8 +549,9 @@ gremlin/
 ├── pytest.ini
 ├── tests/               # pytest suite
 ├── addons/              # mitmproxy addons, all *.py are loaded automatically
-│   └── mock_errors.py   # rule-based error mocking
+│   └── mock_errors.py   # rule-based mocking and request/response changes
 ├── rules/               # rule sets for mock_errors.py
+│   ├── README.md        # guide to every rule option with examples (shared)
 │   ├── examples.json    # reference of all rule features (shared)
 │   └── rules.json       # default rules (personal, created empty on first run)
 ├── env/                 # settings profiles
@@ -486,16 +563,17 @@ gremlin/
     └── validate.bat     # checks port and boolean values
 ```
 
-Everything above is in git except the personal files: `rules/*` other than `rules/examples.json`, `env/*.env` other than `env/example.env`, and `.venv/`.
+Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `env/*.env` other than `env/example.env`, and `.venv/`.
 
 ## Extending
 
-- **New error scenario**: add a rule to `rules/rules.json`, or create a new file in `rules/` and point `MITM_RULES` (or `-r`) to it.
+- **New test scenario**: add a rule to `rules/rules.json`, or create a new file in `rules/` and point `MITM_RULES` (or `-r`) to it.
 - **Sharing a scenario with the team**: add it to `rules/examples.json` (with a `name`, and pointing to `api.example.com` or another placeholder host) or paste it in the task/PR. Personal rule files are not committed.
 - **New target app**: create `env/<name>.env` from `env/example.env`.
 - **New setting**: add the key to `ENV_KEYS` in `lib/load-env.bat` and to `env/example.env`, read it in the script after the `load-env.bat` call following the `command line > profile > default` pattern used there, and validate it (see `lib/validate.bat`).
-- **New rule field**: add it to `REQUIRED_FIELDS` or `OPTIONAL_FIELDS` and validate it in `parse_rule()` in `addons/mock_errors.py`, then document it in [Rules](#rules).
-- **New interception logic** (rewriting responses, logging, injecting headers, …): drop a new [mitmproxy addon](https://docs.mitmproxy.org/stable/addons-overview/) into `addons/`. It is picked up on the next proxy start. Prefix shared helper modules with `_` so they are not loaded as addons. If the addon needs its own options, register them in `load()` (like `rules_file` in `mock_errors.py`) and pass values through `--set` in `commands/proxy-run.bat`.
+- **New rule field**: add it to `REQUIRED_FIELDS` or `OPTIONAL_FIELDS` and validate it in `parse_rule()` in `addons/mock_errors.py`, then document it in [`rules/README.md`](rules/README.md) and [Rules](#rules).
+- **New change in `request` / `response`**: add it to `REQUEST_OPS` / `RESPONSE_OPS`, a field to `Ops`, validate it in `_parse_ops()` and apply it in `apply_ops()` in `addons/mock_errors.py`. Add an example to `rules/examples.json` (a test checks that every change has one) and document it in [`rules/README.md`](rules/README.md); `json` blocks there are validated by the tests too.
+- **New interception logic** beyond rules (logging, recording, …): drop a new [mitmproxy addon](https://docs.mitmproxy.org/stable/addons-overview/) into `addons/`. It is picked up on the next proxy start. Prefix shared helper modules with `_` so they are not loaded as addons. If the addon needs its own options, register them in `load()` (like `rules_file` in `mock_errors.py`) and pass values through `--set` in `commands/proxy-run.bat`.
 - **Another browser**: set `MITM_BROWSER` (or `-b`) to the full path of its exe (Chromium-based browsers only, because the flags are Chromium flags).
 
 ## Tests
@@ -505,7 +583,7 @@ Requires Python 3.10+. The first run creates `.venv` in the project folder and i
 Run it from a console in the project folder (in PowerShell `.\gremlin test`, see [Consoles](#consoles)):
 
 ```bat
-gremlin test                          :: everything, ~30 s
+gremlin test                          :: everything, ~1 min
 gremlin test -m "not e2e"             :: without starting a real mitmdump, ~20 s
 gremlin test -k cors -v               :: only tests with "cors" in the name
 gremlin test tests\test_mocking.py    :: one file
@@ -514,17 +592,19 @@ gremlin test -x                       :: stop at the first failure
 
 Any arguments are passed to pytest as is. Once `.venv` exists, `.venv\Scripts\python -m pytest` works too.
 
-The run ends with a summary such as `175 passed in 33.10s`. On a failure pytest prints the test name and the values that did not match, and `gremlin test` exits with a non-zero code.
+The run ends with a summary such as `340 passed in 53.85s`. On a failure pytest prints the test name and the values that did not match, and `gremlin test` exits with a non-zero code.
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_parse_rule.py` | Validation of a single rule: required fields, types, ranges, defaults, warnings for typos and fields without effect |
-| `tests/test_rules_file.py` | Loading the rules file: invalid JSON / root keeps the previous rules, invalid rules are skipped, `enabled`, duplicates, hot reload, missing file, BOM, warnings instead of errors during startup |
+| `tests/test_parse_rule.py` (sections) | Validation of `request` / `response`: every change, `null` values, `replace` with regular expressions, changes from the wrong section, `mock` fields, the old top-level `error` format and its hint, `mock` combined with `request` / `response` is an error with an explanation |
+| `tests/test_rules_file.py` | Loading the rules file: invalid JSON / root keeps the previous rules, invalid rules are skipped, `enabled`, comment-only notes, duplicates, hot reload, missing file, BOM, warnings instead of errors during startup; `rules/examples.json` loads without warnings and covers every change; every `json` block in `README.md` and `rules/README.md` is a valid rule |
+| `tests/test_modify.py` | Changing the request and the response: JSON Merge Patch, `json`, `body`, `query`, `headers`, `form`, `replace`, `method`, `url`, `status`, `delay`, gzip bodies, order of changes, warnings when a change does not fit the body, log lines, failures |
 | `tests/test_mocking.py` | Matching (`url` wildcards, `method`, `query`, first match wins) and the mocked response (status, body, `content_type`, `headers`, CORS, `delay`, `timeout`, `kill`, passing through on a failure) |
-| `tests/test_e2e.py` | A real mitmdump with the addon between an HTTP client and a local server: passthrough, mock without reaching the server, kill, timeout, delay, hot reload, broken rules do not stop the proxy, WireGuard mode next to the regular proxy |
+| `tests/test_e2e.py` | A real mitmdump with the addon between an HTTP client and a local server: passthrough, mock without reaching the server, changed request as the server sees it (JSON, query, headers, form, method, URL), changed response (including gzip), both together, kill, timeout, delay, hot reload, broken rules do not stop the proxy, WireGuard mode next to the regular proxy |
 | `tests/test_scripts.py` | `gremlin run`, `gremlin proxy run`, `gremlin browser run` and `gremlin phone run` via `--dry-run` in a temp copy of the project: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery, WireGuard options, routing of `gremlin` commands |
 
-When adding a rule field or a profile key, add a test next to the existing ones for that layer.
+When adding a rule field, a change in `request` / `response` or a profile key, add a test next to the existing ones for that layer.
 
 ## Uninstall
 

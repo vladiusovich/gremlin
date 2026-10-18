@@ -1,8 +1,15 @@
-"""Loading and hot-reloading the rules file."""
+"""Loading and hot-reloading the rules file, and the rules shipped in rules/ and the docs."""
+import json
 import logging
+import re
 
-R1 = {"name": "one", "url": "https://a.test/1", "error": 500}
-R2 = {"name": "two", "url": "https://a.test/2", "error": 404}
+import pytest
+
+from conftest import ROOT
+from mock_errors import Mock, Ops, parse_rule
+
+R1 = {"name": "one", "url": "https://a.test/1", "mock": {"status": 500}}
+R2 = {"name": "two", "url": "https://a.test/2", "mock": {"status": 404}}
 
 
 def messages(caplog, level=None):
@@ -46,7 +53,7 @@ def test_invalid_rule_is_skipped_others_loaded(gremlin, caplog):
     rules = gremlin.load([R1, {"name": "typo", "url": "https://a.test/x"}, R2])
     assert [r.name for r in rules] == ["one", "two"]
     log = messages(caplog)
-    assert any('rule #2 "typo": field \'error\' (required) is missing' in m for m in log)
+    assert any('rule #2 "typo": nothing to do' in m for m in log)
     assert any('rule #2 "typo": rule skipped' in m for m in log)
     assert any("Loaded 2 rule(s)" in m and "1 invalid skipped" in m for m in log)
 
@@ -109,7 +116,7 @@ def test_file_appearing_later_is_loaded(gremlin):
 
 
 def test_duplicate_rule_warns(gremlin, caplog):
-    rules = gremlin.load([R1, {**R1, "name": "dup", "error": 400}])
+    rules = gremlin.load([R1, {**R1, "name": "dup", "mock": {"status": 400}}])
     assert len(rules) == 2
     assert any('rule #2 "dup": same method/url/query as rule #1 "one", it will never match' in m
                for m in messages(caplog, logging.WARNING))
@@ -148,3 +155,81 @@ def test_changing_rules_file_option_switches_file(gremlin, tmp_path):
     gremlin.tctx.configure(gremlin.addon, rules_file=str(other))
     assert len(gremlin.addon.rules) == 2
     assert gremlin.addon.path == str(other)
+
+
+def test_comment_only_entries_are_notes(gremlin, caplog):
+    caplog.set_level(logging.INFO)
+    rules = gremlin.load([{"comment": "=== group ==="}, R1, {"comment": ["any", "text"]}, R2])
+    assert [(r.number, r.name) for r in rules] == [(2, "one"), (4, "two")]
+    assert messages(caplog, logging.WARNING) == []
+    assert f"Loaded 2 rule(s) from {gremlin.path}" in messages(caplog, logging.INFO)
+
+
+def test_empty_object_is_still_an_invalid_rule(gremlin, caplog):
+    rules = gremlin.load([{}, R1])
+    assert [r.name for r in rules] == ["one"]
+    assert any("rule #1: field 'url' (required) is missing" in m for m in messages(caplog))
+
+
+def test_incompatible_rule_is_skipped_with_the_reason(gremlin, caplog):
+    rules = gremlin.load([
+        {"name": "mixed", "url": "https://a.test/1", "mock": {"status": 500}, "response": {"status": 401}},
+        R2,
+    ])
+    assert [r.name for r in rules] == ["two"]
+    log = messages(caplog)
+    assert any("rules.json: rule #1 \"mixed\": incompatible: 'mock' cannot be used together with 'response'" in m
+               for m in log)
+    assert 'rules.json: rule #1 "mixed": rule skipped' in log
+    assert any("1 invalid skipped" in m for m in log)
+
+
+def test_old_format_rule_is_loaded_with_a_hint(gremlin, caplog):
+    rules = gremlin.load([{"name": "old", "url": "https://a.test/1", "error": 503, "body": "down"}])
+    assert rules[0].mock.status == 503
+    assert rules[0].mock.body == "down"
+    assert 'rules.json: rule #1 "old": old format: \'error\', \'body\' at the top level still works, ' \
+           'but write it as "mock": {"status": 503, "body": "down"}' in messages(caplog, logging.WARNING)
+
+
+# --- rules shipped with the project -------------------------------------------
+
+def test_examples_file_loads_without_warnings(gremlin, caplog):
+    caplog.set_level(logging.INFO)
+    gremlin.path = ROOT / "rules" / "examples.json"
+    gremlin.configure()
+    rules = gremlin.addon.rules
+    assert messages(caplog, logging.WARNING) == []
+    assert messages(caplog, logging.ERROR) == []
+    # every kind of rule is covered
+    mocks = [r.mock for r in rules if r.mock]
+    assert {"timeout", "kill"} <= {m.status for m in mocks}
+    mock_fields = {k for m in mocks if isinstance(m.status, int) for k, v in vars(m).items()
+                   if v != getattr(Mock(status=500), k)}
+    assert mock_fields == {"status", "body", "content_type", "headers", "delay", "cors"}
+    defaults = vars(Ops())
+    request_ops = {op for r in rules if r.request for op, v in vars(r.request).items() if v != defaults[op]}
+    response_ops = {op for r in rules if r.response for op, v in vars(r.response).items() if v != defaults[op]}
+    assert request_ops == {"method", "url", "query", "body", "json", "form", "replace", "headers", "delay"}
+    assert response_ops == {"status", "body", "json", "replace", "headers", "delay"}
+    assert any(r.request and r.response for r in rules)
+
+
+def doc_rules() -> list:
+    """Every ```json block in the docs that is a rule or a list of rules."""
+    params = []
+    for doc in ("README.md", "rules/README.md"):
+        text = (ROOT / doc).read_text(encoding="utf-8")
+        for i, block in enumerate(re.findall(r"```json\r?\n(.*?)```", text, re.S)):
+            data = json.loads(block)  # a ```json block must be valid JSON
+            for j, raw in enumerate(data if isinstance(data, list) else [data]):
+                if raw.keys() != {"comment"}:
+                    params.append(pytest.param(raw, id=f"{doc}#{i}.{j}"))
+    return params
+
+
+@pytest.mark.parametrize("raw", doc_rules())
+def test_doc_examples_are_valid_rules(raw):
+    rule, errors, warnings = parse_rule(1, raw)
+    assert errors == []
+    assert warnings == []

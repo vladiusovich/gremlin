@@ -5,6 +5,7 @@ env/*.env
 # Personal rule sets; only the examples are shared
 rules/*
 !rules/examples.json
+!rules/README.md
 
 # Python bytecode
 __pycache__/

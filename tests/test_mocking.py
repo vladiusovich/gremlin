@@ -44,13 +44,13 @@ async def test_no_rules_passes_through(gremlin):
 
 
 async def test_exact_url_match(gremlin):
-    gremlin.load([{"url": URL, "error": 500}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}])
     f = await run(gremlin, make_flow())
     assert f.response.status_code == 500
 
 
 async def test_non_matching_url_passes_through(gremlin):
-    gremlin.load([{"url": URL, "error": 500}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}])
     for url in (URL + "/1", "http://api.example.com/v1/orders", "https://api.example.com:8443/v1/orders"):
         f = await run(gremlin, make_flow(url=url))
         assert f.response is None, url
@@ -69,7 +69,7 @@ async def test_non_matching_url_passes_through(gremlin):
     ("https://api.example.com/V1/*", "https://api.example.com/v1/orders", False),
 ])
 async def test_url_wildcards(gremlin, pattern, url, matches):
-    gremlin.load([{"url": pattern, "error": 500}])
+    gremlin.load([{"url": pattern, "mock": {"status": 500}}])
     f = await run(gremlin, make_flow(url=url))
     assert (f.response is not None) == matches
 
@@ -81,7 +81,7 @@ async def test_url_wildcards(gremlin, pattern, url, matches):
     ("POST", "GET", False),
 ])
 async def test_method(gremlin, rule_method, req_method, matches):
-    gremlin.load([{"url": URL, "method": rule_method, "error": 500}])
+    gremlin.load([{"url": URL, "method": rule_method, "mock": {"status": 500}}])
     f = await run(gremlin, make_flow(method=req_method))
     assert (f.response is not None) == matches
 
@@ -100,29 +100,29 @@ async def test_method(gremlin, rule_method, req_method, matches):
     ({"Type": "Cancel"}, URL + "/x?Type=Cancel", False),
 ])
 async def test_query(gremlin, query, url, matches):
-    gremlin.load([{"url": URL, "query": query, "error": 400}])
+    gremlin.load([{"url": URL, "query": query, "mock": {"status": 400}}])
     f = await run(gremlin, make_flow(url=url))
     assert (f.response is not None) == matches
 
 
 async def test_first_match_wins(gremlin):
     gremlin.load([
-        {"url": URL, "method": "POST", "error": 401},
-        {"url": "https://api.example.com/*", "error": 502},
-        {"url": URL, "error": 503},
+        {"url": URL, "method": "POST", "mock": {"status": 401}},
+        {"url": "https://api.example.com/*", "mock": {"status": 502}},
+        {"url": URL, "mock": {"status": 503}},
     ])
     assert (await run(gremlin, make_flow("POST"))).response.status_code == 401
     assert (await run(gremlin, make_flow("GET"))).response.status_code == 502
 
 
 async def test_disabled_rule_does_not_match(gremlin):
-    gremlin.load([{"url": URL, "error": 500, "enabled": False}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}, "enabled": False}])
     assert (await run(gremlin, make_flow())).response is None
 
 
 async def test_rules_file_is_reloaded_on_request(gremlin):
     gremlin.load([])
-    gremlin.write([{"url": URL, "error": 504}])
+    gremlin.write([{"url": URL, "mock": {"status": 504}}])
     f = await run(gremlin, make_flow())
     assert f.response.status_code == 504
 
@@ -130,7 +130,7 @@ async def test_rules_file_is_reloaded_on_request(gremlin):
 # --- response ---------------------------------------------------------------
 
 async def test_default_body(gremlin):
-    gremlin.load([{"url": URL, "error": 503}])
+    gremlin.load([{"url": URL, "mock": {"status": 503}}])
     r = (await run(gremlin, make_flow("PUT"))).response
     assert r.headers["Content-Type"] == "application/json"
     assert json.loads(r.content) == {
@@ -140,7 +140,7 @@ async def test_default_body(gremlin):
 
 @pytest.mark.parametrize("body", [{"code": "NOT_FOUND"}, [1, "two"], {"unicode": "Fehler: Größe – ✓"}])
 async def test_json_body(gremlin, body):
-    gremlin.load([{"url": URL, "error": 404, "body": body}])
+    gremlin.load([{"url": URL, "mock": {"status": 404, "body": body}}])
     r = (await run(gremlin, make_flow())).response
     assert json.loads(r.content) == body
 
@@ -152,33 +152,33 @@ async def test_json_body(gremlin, body):
     (42, b"42"),
 ])
 async def test_raw_body(gremlin, body, content):
-    gremlin.load([{"url": URL, "error": 500, "body": body}])
+    gremlin.load([{"url": URL, "mock": {"status": 500, "body": body}}])
     r = (await run(gremlin, make_flow())).response
     assert r.content == content
     assert r.headers["Content-Type"] == "application/json"
 
 
 async def test_content_type(gremlin):
-    gremlin.load([{"url": URL, "error": 500, "body": "<h1>x</h1>", "content_type": "text/html"}])
+    gremlin.load([{"url": URL, "mock": {"status": 500, "body": "<h1>x</h1>", "content_type": "text/html"}}])
     r = (await run(gremlin, make_flow())).response
     assert r.headers["Content-Type"] == "text/html"
 
 
 async def test_headers_and_content_type_header_override(gremlin):
-    gremlin.load([{"url": URL, "error": 429, "headers": {"Retry-After": 10, "Content-Type": "text/plain"}}])
+    gremlin.load([{"url": URL, "mock": {"status": 429, "headers": {"Retry-After": 10, "Content-Type": "text/plain"}}}])
     r = (await run(gremlin, make_flow())).response
     assert r.headers["Retry-After"] == "10"
     assert r.headers["Content-Type"] == "text/plain"
 
 
 async def test_no_cors_headers_without_origin(gremlin):
-    gremlin.load([{"url": URL, "error": 500}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}])
     r = (await run(gremlin, make_flow())).response
     assert not any(k.lower().startswith("access-control-") for k in r.headers)
 
 
 async def test_cors_headers_for_origin(gremlin):
-    gremlin.load([{"url": URL, "error": 500}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}])
     r = (await run(gremlin, make_flow(headers={"Origin": "http://localhost:3001"}))).response
     assert r.headers["Access-Control-Allow-Origin"] == "http://localhost:3001"
     assert r.headers["Access-Control-Allow-Credentials"] == "true"
@@ -187,19 +187,19 @@ async def test_cors_headers_for_origin(gremlin):
 
 
 async def test_cors_exposes_custom_headers(gremlin):
-    gremlin.load([{"url": URL, "error": 429, "headers": {"Retry-After": "1", "X-Req": "2"}}])
+    gremlin.load([{"url": URL, "mock": {"status": 429, "headers": {"Retry-After": "1", "X-Req": "2"}}}])
     r = (await run(gremlin, make_flow(headers={"Origin": "http://localhost:3001"}))).response
     assert r.headers["Access-Control-Expose-Headers"] == "Retry-After, X-Req"
 
 
 async def test_cors_does_not_override_rule_headers(gremlin):
-    gremlin.load([{"url": URL, "error": 500, "headers": {"Access-Control-Allow-Origin": "*"}}])
+    gremlin.load([{"url": URL, "mock": {"status": 500, "headers": {"Access-Control-Allow-Origin": "*"}}}])
     r = (await run(gremlin, make_flow(headers={"Origin": "http://localhost:3001"}))).response
     assert r.headers["Access-Control-Allow-Origin"] == "*"
 
 
 async def test_cors_false(gremlin):
-    gremlin.load([{"url": URL, "error": 401, "cors": False}])
+    gremlin.load([{"url": URL, "mock": {"status": 401, "cors": False}}])
     r = (await run(gremlin, make_flow(headers={"Origin": "http://localhost:3001"}))).response
     assert r.status_code == 401
     assert "Access-Control-Allow-Origin" not in r.headers
@@ -207,7 +207,7 @@ async def test_cors_false(gremlin):
 
 async def test_mock_is_logged(gremlin, caplog):
     caplog.set_level(logging.INFO)
-    gremlin.load([{"name": "orders", "url": URL, "error": 500}])
+    gremlin.load([{"name": "orders", "url": URL, "mock": {"status": 500}}])
     await run(gremlin, make_flow("POST"))
     assert f'MOCK 500 POST {URL}  [rule #1 "orders"]' in [r.getMessage() for r in caplog.records]
 
@@ -215,13 +215,13 @@ async def test_mock_is_logged(gremlin, caplog):
 # --- delay / timeout / kill -------------------------------------------------
 
 async def test_no_delay_by_default(gremlin, sleeps):
-    gremlin.load([{"url": URL, "error": 500}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}])
     await run(gremlin, make_flow())
     assert sleeps == []
 
 
 async def test_delay_before_response(gremlin, sleeps):
-    gremlin.load([{"url": URL, "error": 500, "delay": 2.5}])
+    gremlin.load([{"url": URL, "mock": {"status": 500, "delay": 2.5}}])
     f = await run(gremlin, make_flow())
     assert sleeps == [2.5]
     assert f.response.status_code == 500
@@ -229,7 +229,7 @@ async def test_delay_before_response(gremlin, sleeps):
 
 async def test_kill(gremlin, sleeps, caplog):
     caplog.set_level(logging.INFO)
-    gremlin.load([{"url": URL, "error": "kill"}])
+    gremlin.load([{"url": URL, "mock": {"status": "kill"}}])
     f = await run(gremlin, make_flow())
     assert f.response is None
     assert f.error is not None and f.error.msg == f.error.KILLED_MESSAGE
@@ -239,7 +239,7 @@ async def test_kill(gremlin, sleeps, caplog):
 
 async def test_timeout(gremlin, sleeps, caplog):
     caplog.set_level(logging.INFO)
-    gremlin.load([{"url": URL, "error": "timeout", "delay": 15}])
+    gremlin.load([{"url": URL, "mock": {"status": "timeout", "delay": 15}}])
     f = await run(gremlin, make_flow())
     assert sleeps == [15.0]
     assert f.response is None
@@ -248,7 +248,7 @@ async def test_timeout(gremlin, sleeps, caplog):
 
 
 async def test_timeout_default_30s(gremlin, sleeps):
-    gremlin.load([{"url": URL, "error": "timeout"}])
+    gremlin.load([{"url": URL, "mock": {"status": "timeout"}}])
     await run(gremlin, make_flow())
     assert sleeps == [30.0]
 
@@ -257,7 +257,7 @@ async def test_real_delay_is_awaited(gremlin):
     # without the sleep stub: the delay really happens and does not block other requests
     import asyncio
     import time
-    gremlin.load([{"url": URL, "error": 500, "delay": 0.2}])
+    gremlin.load([{"url": URL, "mock": {"status": 500, "delay": 0.2}}])
     start = time.monotonic()
     flows = await asyncio.gather(*(run(gremlin, make_flow()) for _ in range(5)))
     elapsed = time.monotonic() - start
@@ -266,7 +266,7 @@ async def test_real_delay_is_awaited(gremlin):
 
 
 async def test_failure_while_mocking_passes_request_through(gremlin, monkeypatch, caplog):
-    gremlin.load([{"url": URL, "error": 500}, {"url": URL, "error": 502}])
+    gremlin.load([{"url": URL, "mock": {"status": 500}}, {"url": URL, "mock": {"status": 502}}])
 
     def boom(*args, **kwargs):
         raise RuntimeError("boom")
