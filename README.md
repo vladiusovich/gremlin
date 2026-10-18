@@ -1,22 +1,41 @@
 # Gremlin
 
-*Feed it rules, watch your API break.*
+*Feed it rules, watch your app break.*
 
-A local tool for testing how the frontend handles API failures and unusual data, **without touching the backend**. For chosen requests it can:
+A local Windows tool that sits between your app and its API and breaks chosen requests on purpose: to see how the UI copes with errors and odd data, and how the server copes with requests the UI would never send. No changes to the backend or the app code: you describe what to break in a JSON rules file.
 
-- **mock the response**: any status and body, a delay, a timeout or a dropped connection; the request never reaches the server;
-- **change the request** before it reaches the server: JSON fields, query parameters, headers, form fields, the whole body, the method or the URL. Good for cases the UI does not let you produce, such as a negative amount, a missing field or an expired token;
-- **change the real response** before it reaches the app: the status, JSON fields, headers, the body, a delay.
+For each matching request a rule can:
 
-Everything else goes to the real server untouched. Built on [mitmproxy](https://mitmproxy.org/), works with `localhost` and with real domains over HTTPS, in a browser, in API clients (curl, Postman) and in mobile apps on a phone. Details: [How it works](#how-it-works).
+- **answer instead of the server** (`mock`): any status and body, a delay, a hang or a dropped connection. The request never reaches the server;
+- **change the request** before it is sent (`request`): JSON fields, query parameters, headers, form fields, the whole body, the method or the URL. Good for cases the UI does not let you produce, such as a negative amount, a missing field or an expired token;
+- **change the real response** before it reaches the app (`response`): the status, JSON fields, headers, the body, a delay. A zero balance, an empty list, a feature flag off.
+
+Everything else passes through untouched.
+
+> ⚠️ `request` / `response` rules talk to the **real server**: a changed request is really executed there. Point them at a test stand, not production.
+
+**Works with:** a dedicated Chrome / Edge window (your regular browser is not affected), `localhost` and real domains over HTTPS, API clients (curl, Postman) and mobile apps on a phone or an emulator through WireGuard, including Capacitor apps.
+
+**Convenient:** rules reload on save, no restart needed; a mistake in a rule is explained in the log while the previous rules keep working; separate profiles per stand or scenario. Built on [mitmproxy](https://mitmproxy.org/), details: [How it works](#how-it-works).
+
+Typical uses:
+
+- check that the UI shows the right message for a specific backend error (`402 Trade session is closed`, `489 Close-only mode`, …);
+- reproduce rare or hard-to-trigger errors on demand;
+- test loading states, retries and timeouts (`delay`, `timeout`);
+- test behaviour on network failures (`kill`);
+- send values the UI does not allow (negative amounts, missing fields, broken tokens) and check how the server and the UI react (`request`);
+- show the UI real data with one field changed: a zero balance, a closed market, a feature flag off, an empty list (`response`).
+
+Contents:
 
 - [1. Install](#1-install)
 - [2. Create a profile](#2-create-a-profile)
 - [3. Create the rules file for the profile](#3-create-the-rules-file-for-the-profile)
 - [4. Run](#4-run)
+- [Consoles](#consoles): cmd, PowerShell, VS Code, Git Bash
 - [Several profiles and rule sets](#several-profiles-and-rule-sets)
 - [Phones (Android, iOS)](#phones-android-ios): mobile and Capacitor apps through WireGuard
-- [Consoles](#consoles): cmd, PowerShell, VS Code, Git Bash
 - Reference: [Settings profiles](#settings-profiles) · [Command-line options](#command-line-options) · [Rules](#rules) · [Troubleshooting](#troubleshooting)
 - Background: [How it works](#how-it-works) · [Project structure](#project-structure) · [Extending](#extending) · [Tests](#tests) · [Uninstall](#uninstall)
 
@@ -485,15 +504,6 @@ Problems found while the proxy is starting are printed as warnings rather than e
 ---
 
 ## How it works
-
-Typical uses:
-
-- check that the UI shows the right message for a specific backend error (`402 Trade session is closed`, `489 Close-only mode`, …);
-- reproduce rare or hard-to-trigger errors on demand;
-- test loading states, retries and timeouts (`delay`, `timeout`);
-- test behaviour on network failures (`kill`);
-- send values the UI does not allow (negative amounts, missing fields, broken tokens) and check how the server and the UI react (`request`);
-- show the UI real data with one field changed: a zero balance, a closed market, a feature flag off, an empty list (`response`).
 
 ```text
  Browser (dedicated profile)
