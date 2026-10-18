@@ -10,7 +10,6 @@ A rules file tells Gremlin which requests to intercept and what to do with them.
 - [Request and response together](#request-and-response-together)
 - [Recipes](#recipes): ready rules for typical test cases
 - [Reference](#reference): all fields, order of changes, log lines, validation messages
-- [The old format (`error`)](#the-old-format-error)
 - [Limitations](#limitations)
 - [Organizing rule files](#organizing-rule-files)
 
@@ -660,34 +659,7 @@ Warnings (the rule works, but something in it does nothing):
 rules.json: rule #8: field 'response.query' is ignored: 'query' only works in 'request'
 rules.json: rule #9: unknown field 'request.jsn' is ignored, did you mean 'request.json'?
 rules.json: rule #10: 'body' at the top level is ignored: put it inside 'mock' (a fake response) or 'response' (changes to the real response)
-rules.json: rule #11: old format: 'error', 'body' at the top level still works, but write it as "mock": {"status": 404, "body": {"code": "NOT_FOUND"}}
 ```
-
-## The old format (`error`)
-
-Before `mock` existed, a fake answer was written with fields at the top level of a rule. Such rules **still work**, but the proxy window prints a warning with the exact replacement:
-
-```text
-rules.json: rule #1: old format: 'error', 'body' at the top level still works, but write it as "mock": {"status": 404, "body": {"code": "NOT_FOUND"}}
-```
-
-| Old (top level) | New (inside `mock`) |
-| --- | --- |
-| `"error": 500` | `"mock": {"status": 500}` |
-| `"body"` | `"mock": {"body": …}` |
-| `"content_type"` | `"mock": {"content_type": …}` |
-| `"headers"` | `"mock": {"headers": …}` |
-| `"delay"` | `"mock": {"delay": …}` |
-| `"cors"` | `"mock": {"cors": …}` |
-
-```jsonc
-// old
-{ "url": "https://api.example.com/v1/orders", "error": 500, "body": { "code": "DOWN" }, "delay": 2 }
-// new
-{ "url": "https://api.example.com/v1/orders", "mock": { "status": 500, "body": { "code": "DOWN" }, "delay": 2 } }
-```
-
-The old format follows the same rules as `mock`: `error` together with `request` / `response` is an error. Mixing the two formats in one rule (`mock` plus a top-level `error` or `body`) is an error too.
 
 ## Limitations
 
@@ -700,7 +672,7 @@ The old format follows the same rules as `mock`: `error` together with `request`
 
 ## Organizing rule files
 
-- One file per scenario (`rules/trade-errors.json`, `rules/validation.json`, …), selected with `MITM_RULES` in a profile or `-r`.
+- Each profile uses `rules/<profile>.json` by default. For scenarios shared between profiles use one file per scenario (`rules/trade-errors.json`, `rules/validation.json`, …), selected by short name with `MITM_RULES` in a profile or `-r`: `-r trade-errors`. Subfolders group scenarios by feature: `-r trade/errors` is `rules/trade/errors.json`.
 - To turn a rule off temporarily, set `"enabled": false` instead of deleting it.
 - An entry with only `comment` is a note, not a rule. Use it to split a file into groups; it does not shift the numbering of the other rules (rule numbers are positions in the file):
 

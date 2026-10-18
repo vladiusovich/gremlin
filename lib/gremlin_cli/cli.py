@@ -7,11 +7,11 @@ from . import browser, install, proxy, testing
 from .common import PROG, Fail
 
 HELP = f"""Usage:
-  {PROG} browser run [URL] [-e profile] [-b {browser.BROWSERS.replace(', ', '|')}|path] [-p PORT] [-r rules.json] [-w] [-k] [--dry-run]
+  {PROG} browser run [URL] [--profile NAME] [-b {browser.BROWSERS.replace(', ', '|')}|path] [-p PORT] [-r RULES] [-w] [-k] [--dry-run]
                       proxy (if not running yet) + browser
-  {PROG} proxy run   [-e profile] [-p PORT] [-r rules.json] [-w] [-g] [--wg-port PORT] [--dry-run]
+  {PROG} proxy run   [--profile NAME] [-p PORT] [-r RULES] [-w] [-g] [--wg-port PORT] [--dry-run]
                       proxy only, in this console; -g adds WireGuard for phones
-  {PROG} mobile run  [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
+  {PROG} mobile run  [--profile NAME] [-p PORT] [-r RULES] [--wg-port PORT] [--dry-run]
                       proxy + WireGuard for phones, QR code in mitmweb
   {PROG} install     [-y]
                       install mitmproxy and trust its certificate

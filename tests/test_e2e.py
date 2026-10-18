@@ -304,14 +304,6 @@ def test_incompatible_rule_is_skipped_and_the_request_reaches_the_server(upstrea
     assert "rule #1: rule skipped" in log
 
 
-def test_old_format_still_mocks(upstream, proxy_factory):
-    proxy = proxy_factory([{"url": upstream.base + "/old", "error": 418, "body": "teapot"}])
-    status, _, body = proxy.request("GET", upstream.base + "/old")
-    assert (status, body) == (418, b"teapot")
-    assert upstream.hits == []
-    assert "old format: 'error', 'body' at the top level still works" in proxy.log()
-
-
 def test_wireguard_mode_keeps_the_regular_proxy(upstream, proxy_factory, tmp_path):
     # the modes "gremlin mobile run" passes; confdir in tmp keeps the real ~/.mitmproxy untouched
     wg_port = free_port()

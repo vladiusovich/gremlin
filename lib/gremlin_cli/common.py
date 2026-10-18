@@ -16,7 +16,6 @@ MAIN = ROOT / "lib" / "main.py"
 WINDOWS = sys.platform == "win32"
 # How the user calls gremlin in messages: Linux shells never run programs from the current folder by name
 PROG = "gremlin" if WINDOWS else "./gremlin"
-DEFAULT_RULES = ROOT / "rules" / "rules.json"
 BOOL_VALUES = ("1", "0", "true", "false", "yes", "no", "on", "off")
 
 
@@ -48,7 +47,7 @@ def fail(msg: str, *details: str) -> NoReturn:
 
 
 def rel(*parts: str) -> str:
-    """A path inside the project, as shown in messages: rules\\rules.json on Windows, rules/rules.json elsewhere."""
+    """A path inside the project, as shown in messages: rules\\default.json on Windows, rules/default.json elsewhere."""
     return os.path.join(*parts)
 
 
