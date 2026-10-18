@@ -1,2 +1,5 @@
 # cmd.exe needs CRLF in batch files: LF can break labels and goto
 *.bat text eol=crlf
+# sh needs LF in shell scripts: CR ends up in commands and arguments
+*.sh text eol=lf
+gremlin text eol=lf

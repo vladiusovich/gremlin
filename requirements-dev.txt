@@ -1,4 +1,4 @@
-# Test dependencies only: the proxy itself runs on the mitmproxy installed by install.bat.
+# Test dependencies only: the proxy itself runs on the mitmproxy installed by gremlin install.
 mitmproxy>=11
 pytest>=8
 pytest-asyncio>=0.24

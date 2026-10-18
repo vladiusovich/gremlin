@@ -1,0 +1,21 @@
+#!/bin/sh
+# Single entry point on Linux: runs "./gremlin <command> [options]" with Python (lib/main.py).
+#
+#   ./gremlin browser run [options]    proxy (if not running yet, in a new terminal window) + browser
+#   ./gremlin proxy run [options]      proxy only, in the current terminal
+#   ./gremlin mobile run [options]     proxy + WireGuard for phones, in mitmweb
+#   ./gremlin install [-y]             Python, mitmproxy and its certificate (install.sh)
+#   ./gremlin test [pytest options]    run the tests
+ROOT=$(cd "$(dirname "$0")" && pwd)
+
+# install works without Python: install.sh sets it up first
+case "$1" in
+  [Ii][Nn][Ss][Tt][Aa][Ll][Ll]) shift; exec sh "$ROOT/install.sh" "$@" ;;
+esac
+
+. "$ROOT/lib/find-python.sh"
+if [ -z "$PYTHON" ]; then
+  echo "[!!] Python 3.10+ not found. Run: ./install.sh"
+  exit 1
+fi
+exec "$PYTHON" "$ROOT/lib/main.py" "$@"

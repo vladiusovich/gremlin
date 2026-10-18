@@ -1,7 +1,8 @@
-"""Batch scripts: profiles, validation and command-line options, checked through --dry-run.
+"""The gremlin commands: profiles, validation and command-line options, checked through --dry-run.
 
-The scripts run in a copy of the project in a temp folder, so env/ and rules/ of the
-real checkout are never touched.
+They run through the platform's entry point (gremlin.bat on Windows, gremlin on Linux) in a copy of
+the project in a temp folder, so env/ and rules/ of the real checkout are never touched. Fake browser
+executables on PATH stand in for Chrome and Edge, so the tests do not depend on what is installed.
 """
 import os
 import shutil
@@ -15,7 +16,13 @@ import pytest
 
 from conftest import ROOT
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="batch scripts are Windows-only")
+sys.path.insert(0, str(ROOT / "lib"))
+from gremlin_cli.common import quote  # noqa: E402
+
+WINDOWS = sys.platform == "win32"
+ENTRY = "gremlin.bat" if WINDOWS else "gremlin"
+FAKE_BROWSERS = {"chrome": "chrome.exe", "edge": "msedge.exe"} if WINDOWS else \
+    {"chrome": "google-chrome", "edge": "microsoft-edge"}
 
 
 def free_port() -> int:
@@ -28,9 +35,18 @@ class Project:
     def __init__(self, root: Path):
         self.root = root
         root.mkdir()
-        shutil.copy(ROOT / "gremlin.bat", root / "gremlin.bat")
-        shutil.copytree(ROOT / "commands", root / "commands")
-        shutil.copytree(ROOT / "lib", root / "lib")
+        for name in ("gremlin.bat", "gremlin", "install.bat", "install.sh"):
+            shutil.copy(ROOT / name, root / name)
+        shutil.copytree(ROOT / "lib", root / "lib", ignore=shutil.ignore_patterns("__pycache__"))
+        self.extra_env: dict[str, str] = {}
+        self.bin = root.parent / "fakebin"
+        self.bin.mkdir()
+        self.browsers = {}
+        for key, name in FAKE_BROWSERS.items():
+            exe = self.bin / name
+            exe.write_text("")
+            exe.chmod(0o755)
+            self.browsers[key] = str(exe)
         (root / "env").mkdir()
         (root / "rules").mkdir()
         (root / "addons").mkdir()
@@ -42,12 +58,14 @@ class Project:
     def run(self, *args: str):
         env = dict(os.environ)
         # mitmdump from the test venv, so the scripts find it without install.bat
-        env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
+        env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), str(self.bin), env.get("PATH", "")])
+        env["PYTHONIOENCODING"] = "utf-8"
         for k in [k for k in env if k.upper().startswith("MITM_")]:
             del env[k]
-        r = subprocess.run([str(self.root / "gremlin.bat"), *args], cwd=self.root, env=env,
+        env.update(self.extra_env)
+        r = subprocess.run([str(self.root / ENTRY), *args], cwd=self.root, env=env,
                            capture_output=True, timeout=60)
-        out = (r.stdout + r.stderr).decode("cp866", errors="replace")
+        out = (r.stdout + r.stderr).decode("utf-8", errors="replace")
         return r.returncode, out
 
 
@@ -71,8 +89,8 @@ def test_defaults(project):
     cmd = command_line(out)
     assert "mitmdump" in cmd.lower()
     assert " -p 8080 " in cmd
-    assert f'rules_file={project.root}\\rules\\rules.json' in cmd
-    assert "An empty rules\\rules.json would be created" in out
+    assert quote(f"rules_file={project.root / 'rules' / 'rules.json'}") in cmd
+    assert f"An empty {os.path.join('rules', 'rules.json')} would be created" in out
     assert "--mode" not in cmd
     assert "WireGuard" not in out
     # --dry-run creates nothing
@@ -105,7 +123,7 @@ def test_named_profile_and_relative_rules(project):
     cmd = command_line(out)
     assert " -p 9002 " in cmd
     assert "mitmweb" in cmd.lower()
-    assert f"rules_file={project.root}\\rules\\staging.json" in cmd
+    assert quote(f"rules_file={project.root / 'rules' / 'staging.json'}") in cmd
 
 
 def test_command_line_overrides_profile(project):
@@ -122,7 +140,7 @@ def test_command_line_overrides_profile(project):
 def test_missing_profile(project):
     code, out = project.run("proxy", "run", "-e", "nope", "--dry-run")
     assert code == 1
-    assert "Profile not found: env\\nope.env" in out
+    assert f"Profile not found: {os.path.join('env', 'nope.env')}" in out
 
 
 def test_missing_non_default_rules_file(project):
@@ -133,7 +151,7 @@ def test_missing_non_default_rules_file(project):
 
 
 def test_unknown_profile_key_warns(project):
-    project.profile("default", "MITM_PROT=1\nPATH=C:\\nothing\n")
+    project.profile("default", "MITM_PROT=1\nPATH=/nothing\n")
     code, out = project.run("proxy", "run", "--dry-run")
     assert code == 0, out
     assert '[warn]' in out and 'unknown key "MITM_PROT" skipped' in out
@@ -183,7 +201,7 @@ def test_wireguard_option(project, flag):
     assert "mitmdump" in cmd.lower()
     assert "WireGuard for phones on UDP port 51820" in out
     assert "add -w to get it as a QR code" in out
-    assert "localport=51820" in out
+    assert ("localport=51820" if WINDOWS else "sudo ufw allow 51820/udp") in out
 
 
 def test_mobile_run_is_wireguard_in_mitmweb(project):
@@ -260,14 +278,14 @@ def test_browser_defaults(project):
     code, out = project.run("browser", "run", "-p", str(port), "--dry-run")
     assert code == 0, out
     line = browser_line(out)
-    assert line.startswith("chrome ")
+    assert line.startswith(quote(project.browsers["chrome"]) + " ")
     assert f"--proxy-server=127.0.0.1:{port}" in line
-    assert '--proxy-bypass-list="<-loopback>"' in line
+    assert quote("--proxy-bypass-list=<-loopback>") in line
     assert "--disable-quic" in line
     assert f"mitm-profile-chrome-{port}" in line
-    assert line.endswith('"http://localhost:3001/"')
+    assert line.endswith(" " + quote("http://localhost:3001/"))
     assert "--ignore-certificate-errors" not in line
-    # the proxy is not running yet, so proxy-run.bat is called with the same port
+    # the proxy is not running yet, so gremlin proxy run is called with the same port
     assert f" -p {port} " in command_line(out)
 
 
@@ -278,9 +296,9 @@ def test_browser_profile_and_options(project):
     code, out = project.run("browser", "run", "--dry-run")
     assert code == 0, out
     line = browser_line(out)
-    assert line.startswith("msedge ")
+    assert line.startswith(quote(project.browsers["edge"]) + " ")
     assert "--ignore-certificate-errors" in line
-    assert line.endswith('"https://app.example.com/"')
+    assert line.endswith(" " + quote("https://app.example.com/"))
     assert "mitmweb" in command_line(out).lower()
 
 
@@ -290,7 +308,7 @@ def test_browser_url_argument_overrides_profile(project):
                             "-k", "--dry-run")
     assert code == 0, out
     line = browser_line(out)
-    assert line.endswith('"https://other.example.com/x"')
+    assert line.endswith(" " + quote("https://other.example.com/x"))
     assert "--ignore-certificate-errors" in line
 
 
@@ -299,7 +317,8 @@ def test_browser_url_with_special_characters_from_profile(project):
     project.profile("default", "MITM_URL=https://app.example.com/a%20b?x=1&y=2\n")
     code, out = project.run("browser", "run", "-p", str(free_port()), "--dry-run")
     assert code == 0, out
-    assert browser_line(out).endswith('"https://app.example.com/a%20b?x=1&y=2"')
+    assert browser_line(out).endswith(" " + quote("https://app.example.com/a%20b?x=1&y=2"))
+
 
 def test_browser_invalid_url(project):
     code, out = project.run("browser", "run", "app.example.com", "--dry-run")
@@ -308,7 +327,7 @@ def test_browser_invalid_url(project):
 
 
 def test_browser_not_found(project):
-    code, out = project.run("browser", "run", "-b", "C:\\nope\\browser.exe", "--dry-run")
+    code, out = project.run("browser", "run", "-b", str(project.root / "nope" / "browser"), "--dry-run")
     assert code == 1
     assert "not found" in out
 
@@ -378,7 +397,8 @@ def test_browser_unknown_option(project):
 def test_gremlin_help(project, args):
     code, out = project.run(*args)
     assert code == 1
-    assert all(c in out for c in ("gremlin browser run", "gremlin proxy run", "gremlin mobile run"))
+    assert all(c in out for c in ("gremlin browser run", "gremlin proxy run", "gremlin mobile run",
+                                  "gremlin install", "gremlin test"))
     assert "gremlin run" not in out and "phone run" not in out
 
 
@@ -396,12 +416,30 @@ def test_gremlin_commands_are_case_insensitive(project):
 
 
 def test_gremlin_passes_quoted_arguments_unchanged(project):
-    # spaces, % and & inside a quoted argument survive the extra hop through gremlin.bat;
+    # spaces, % and & inside a quoted argument survive the extra hop through gremlin.bat / gremlin;
     # the space also makes subprocess quote the URL, as a user would in cmd
     (project.root / "rules" / "my rules.json").write_text("[]", encoding="ascii")
     code, out = project.run("browser", "run", "https://app.example.com/a%20b c?x=1&y=2",
                             "-r", str(project.root / "rules" / "my rules.json"),
                             "-p", str(free_port()), "--dry-run")
     assert code == 0, out
-    assert '"https://app.example.com/a%20b c?x=1&y=2"' in browser_line(out)
+    assert quote("https://app.example.com/a%20b c?x=1&y=2") in browser_line(out)
     assert "my rules.json" in command_line(out)
+
+
+def test_gremlin_install_passes_options_on(project):
+    # install goes through install.bat / install.sh (they work without Python), then to the Python part
+    code, out = project.run("Install", "--bogus")
+    assert code == 1
+    assert "[ok] Python:" in out
+    assert "Unknown option: --bogus" in out
+
+
+@pytest.mark.skipif(WINDOWS, reason="Linux: the proxy window is a terminal emulator of the desktop session")
+def test_browser_without_a_graphical_session(project):
+    # nothing listens on the port, so the proxy would be started in a new terminal window: there is none
+    project.extra_env = {"DISPLAY": "", "WAYLAND_DISPLAY": ""}
+    code, out = project.run("browser", "run", "-p", str(free_port()))
+    assert code == 1, out
+    assert "No graphical session" in out
+    assert "./gremlin proxy run" in out
