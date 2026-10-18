@@ -3,25 +3,25 @@ setlocal EnableExtensions
 rem Opens a browser with a dedicated profile whose traffic all goes through mitmproxy.
 rem If no proxy is listening on the port yet, runs "gremlin proxy run" in a separate window.
 rem
-rem   gremlin run [URL] [options]           proxy (if not running yet) + browser
-rem   gremlin browser run [URL] [options]   browser only (gremlin passes --no-proxy-start)
+rem   gremlin browser run [URL] [options]
 rem
 rem   URL                    start page (default http://localhost:3001/)
 rem   -e, --env NAME         settings profile env\NAME.env (default env\default.env, if present)
 rem   -b, --browser NAME     chrome | edge | path to a Chromium-based browser exe (default chrome)
 rem   -p, --port PORT        proxy port (default 8080)
-rem   -r, --rules FILE       rules file for mock_errors.py (default rules\rules.json), not with browser run
-rem   -w, --web              start the proxy as mitmweb (traffic UI at http://127.0.0.1:8081), not with browser run
+rem   -r, --rules FILE       rules file for mock_errors.py (default rules\rules.json)
+rem   -w, --web              start the proxy as mitmweb (traffic UI at http://127.0.0.1:8081)
 rem   -k, --insecure         ignore certificate errors (if install.bat was not run)
 rem   --dry-run              print the commands without running anything
 rem
 rem Priority: command line > profile > built-in default.
+rem A proxy already running on the port is reused only if it has the same rules file;
+rem with other rules, or another program on the port, the script stops with an error.
 rem
 rem Examples:
-rem   gremlin run
-rem   gremlin run -e staging
-rem   gremlin run https://app.example.com/ -b edge -p 8081
+rem   gremlin browser run
 rem   gremlin browser run -e staging
+rem   gremlin browser run https://app.example.com/ -b edge -p 8081
 
 for %%r in ("%~dp0..") do set "ROOT=%%~fr\"
 set "ENV_NAME="
@@ -31,8 +31,6 @@ set "OPT_PORT="
 set "OPT_RULES="
 set "OPT_WEB="
 set "OPT_INSECURE="
-set "START_PROXY=1"
-set "PROXY_ONLY_OPT="
 set "DRY="
 
 :parse
@@ -49,7 +47,6 @@ if /i "%~1"=="-w"               (set "OPT_WEB=1" & shift & goto :parse)
 if /i "%~1"=="--web"            (set "OPT_WEB=1" & shift & goto :parse)
 if /i "%~1"=="-k"               (set "OPT_INSECURE=1" & shift & goto :parse)
 if /i "%~1"=="--insecure"       (set "OPT_INSECURE=1" & shift & goto :parse)
-if /i "%~1"=="--no-proxy-start" (set "START_PROXY=" & shift & goto :parse)
 if /i "%~1"=="--dry-run"        (set "DRY=1" & shift & goto :parse)
 if /i "%~1"=="-h"               goto :help
 if /i "%~1"=="--help"           goto :help
@@ -62,14 +59,6 @@ set "OPT_URL=%~1"
 shift
 goto :parse
 :parsed
-
-rem -r and -w only matter when the proxy is started here; refuse them rather than silently ignore
-if not defined START_PROXY if defined OPT_RULES set "PROXY_ONLY_OPT=-r"
-if not defined START_PROXY if defined OPT_WEB set "PROXY_ONLY_OPT=-w"
-if defined PROXY_ONLY_OPT (
-  echo [!!] %PROXY_ONLY_OPT% is a proxy option: use "gremlin run" or "gremlin proxy run"
-  goto :help
-)
 
 call "%ROOT%lib\load-env.bat" "%ENV_NAME%" || exit /b 1
 if defined ENV_FILE echo [ok] Profile: %ENV_FILE%
@@ -115,16 +104,26 @@ if /i not "%BROWSER%"=="chrome" if /i not "%BROWSER%"=="edge" if not exist "%EXE
 rem Separate profile per browser+port pair: otherwise the flags are ignored if the browser is already open
 for %%n in ("%BROWSER%") do set "PROFILE_DIR=%TEMP%\mitm-profile-%%~nn-%PORT%"
 
-if not defined START_PROXY (
-  call :is_listening || echo [warn] No proxy on port %PORT%: pages will not load until it runs ^(gremlin proxy run -p %PORT%^)
-  goto :browser
-)
-call :is_listening
-if not errorlevel 1 (
-  echo [ok] Proxy is already listening on port %PORT%.
-  goto :browser
-)
+rem Branches via goto, not ( ) blocks: OWNER_INFO and RULES may contain parentheses
+call :port_owner -Rules "%RULES%"
+if "%OWNER%"=="free" goto :start_proxy
+if "%OWNER%"=="same" goto :reuse_proxy
+if "%OWNER%"=="other-rules" goto :other_rules
+echo [!!] Port %PORT% is used by %OWNER_INFO%, not by the gremlin proxy.
+echo      Close that program or use another port: -p PORT ^(or MITM_PORT in the profile^)
+exit /b 1
 
+:other_rules
+echo [!!] A proxy with other rules is already running on port %PORT%: %OWNER_INFO%
+echo      This profile needs: %RULES%
+echo      Stop that proxy ^(Ctrl+C in its window^) and run again, or use another port: -p PORT
+exit /b 1
+
+:reuse_proxy
+echo [ok] Proxy is already listening on port %PORT%, rules: %RULES%
+goto :browser
+
+:start_proxy
 if defined DRY (
   call "%ROOT%commands\proxy-run.bat" %ENV_ARG% -p %PORT% -r "%RULES%" %PROXY_FLAGS% --dry-run || exit /b 1
   goto :browser
@@ -140,7 +139,8 @@ rem cmd /k keeps the window open, so startup errors stay visible
 start "mitmproxy :%PORT%" cmd /k ""%ROOT%commands\proxy-run.bat" %ENV_ARG% -p %PORT% -r "%RULES%" %PROXY_FLAGS%"
 
 for /l %%i in (1,1,30) do (
-  call :is_listening && goto :browser
+  call :port_owner
+  call :is_busy && goto :browser
   timeout /t 1 /nobreak >nul
 )
 echo [!!] The proxy did not start within 30 seconds, see the "mitmproxy :%PORT%" window.
@@ -160,18 +160,24 @@ if errorlevel 1 (
 )
 exit /b 0
 
-:is_listening
-powershell -NoProfile -Command "$c = New-Object Net.Sockets.TcpClient; try { $c.Connect('127.0.0.1', %PORT%); exit 0 } catch { exit 1 } finally { $c.Close() }"
-exit /b %errorlevel%
+:port_owner
+rem Sets OWNER (free / busy / same / other-rules / other) and OWNER_INFO, see lib\port-owner.ps1
+set "OWNER=free"
+set "OWNER_INFO="
+for /f "tokens=1,*" %%a in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%lib\port-owner.ps1" -Port %PORT% %*') do (
+  set "OWNER=%%a"
+  set "OWNER_INFO=%%b"
+)
+exit /b 0
+
+:is_busy
+if "%OWNER%"=="free" exit /b 1
+exit /b 0
 
 :is_on
 for %%v in (1 true yes on) do if /i "%~1"=="%%v" exit /b 0
 exit /b 1
 
 :help
-if defined START_PROXY (
-  echo Usage: gremlin run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-r rules.json] [-w] [-k] [--dry-run]
-) else (
-  echo Usage: gremlin browser run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-k] [--dry-run]
-)
+echo Usage: gremlin browser run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-r rules.json] [-w] [-k] [--dry-run]
 exit /b 1

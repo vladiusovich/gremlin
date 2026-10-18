@@ -8,6 +8,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -170,7 +171,7 @@ def test_unknown_option(project):
     assert "Unknown option: --bogus" in out
 
 
-# --- WireGuard: gremlin proxy run -g / gremlin phone run --------------------
+# --- WireGuard: gremlin proxy run -g / gremlin mobile run -------------------
 
 @pytest.mark.parametrize("flag", ["-g", "--wireguard"])
 def test_wireguard_option(project, flag):
@@ -185,8 +186,8 @@ def test_wireguard_option(project, flag):
     assert "localport=51820" in out
 
 
-def test_phone_run_is_wireguard_in_mitmweb(project):
-    code, out = project.run("phone", "run", "--dry-run")
+def test_mobile_run_is_wireguard_in_mitmweb(project):
+    code, out = project.run("mobile", "run", "--dry-run")
     assert code == 0, out
     cmd = command_line(out)
     assert "mitmweb" in cmd.lower()
@@ -194,9 +195,9 @@ def test_phone_run_is_wireguard_in_mitmweb(project):
     assert "Capture tab" in out
 
 
-def test_phone_run_options(project):
+def test_mobile_run_options(project):
     (project.root / "rules" / "mobile.json").write_text("[]")
-    code, out = project.run("Phone", "Run", "-p", "9010", "--wg-port", "51999",
+    code, out = project.run("Mobile", "Run", "-p", "9010", "--wg-port", "51999",
                             "-r", str(project.root / "rules" / "mobile.json"), "--dry-run")
     assert code == 0, out
     cmd = command_line(out)
@@ -223,7 +224,7 @@ def test_wg_port_ignored_without_wireguard(project):
 
 @pytest.mark.parametrize("port", ["0", "abc", "70000"])
 def test_invalid_wg_port(project, port):
-    code, out = project.run("phone", "run", "--wg-port", port, "--dry-run")
+    code, out = project.run("mobile", "run", "--wg-port", port, "--dry-run")
     assert code == 1
     assert f'Invalid port "{port}"' in out
     assert "--wg-port or MITM_WG_PORT" in out
@@ -236,17 +237,17 @@ def test_invalid_wireguard_value(project):
     assert 'Invalid value MITM_WIREGUARD="maybe"' in out
 
 
-def test_run_starts_proxy_with_wireguard_from_profile(project):
-    # gremlin run passes the profile on, so the proxy it starts gets WireGuard too
+def test_browser_starts_proxy_with_wireguard_from_profile(project):
+    # gremlin browser run passes the profile on, so the proxy it starts gets WireGuard too
     project.profile("default", "MITM_WIREGUARD=1\n")
     port = free_port()
-    code, out = project.run("run", "-p", str(port), "--dry-run")
+    code, out = project.run("browser", "run", "-p", str(port), "--dry-run")
     assert code == 0, out
     assert f" -p {port} --mode regular --mode wireguard@51820 " in command_line(out)
     assert f"--proxy-server=127.0.0.1:{port}" in browser_line(out)
 
 
-# --- gremlin run / gremlin browser run -----------------------------------
+# --- gremlin browser run ------------------------------------------------
 
 def browser_line(out: str) -> str:
     lines = [l.strip() for l in out.splitlines() if "--proxy-server=" in l]
@@ -256,7 +257,7 @@ def browser_line(out: str) -> str:
 
 def test_browser_defaults(project):
     port = free_port()
-    code, out = project.run("run", "-p", str(port), "--dry-run")
+    code, out = project.run("browser", "run", "-p", str(port), "--dry-run")
     assert code == 0, out
     line = browser_line(out)
     assert line.startswith("chrome ")
@@ -274,7 +275,7 @@ def test_browser_profile_and_options(project):
     port = free_port()
     project.profile("default", f"MITM_URL=https://app.example.com/\nMITM_BROWSER=edge\nMITM_PORT={port}\n"
                                "MITM_INSECURE=1\nMITM_WEB=1\n")
-    code, out = project.run("run", "--dry-run")
+    code, out = project.run("browser", "run", "--dry-run")
     assert code == 0, out
     line = browser_line(out)
     assert line.startswith("msedge ")
@@ -285,7 +286,7 @@ def test_browser_profile_and_options(project):
 
 def test_browser_url_argument_overrides_profile(project):
     project.profile("default", "MITM_URL=https://app.example.com/\n")
-    code, out = project.run("run", "https://other.example.com/x", "-p", str(free_port()),
+    code, out = project.run("browser", "run", "https://other.example.com/x", "-p", str(free_port()),
                             "-k", "--dry-run")
     assert code == 0, out
     line = browser_line(out)
@@ -296,63 +297,77 @@ def test_browser_url_argument_overrides_profile(project):
 def test_browser_url_with_special_characters_from_profile(project):
     # the profile is the shell-independent way to pass & and %20 (see README, Consoles)
     project.profile("default", "MITM_URL=https://app.example.com/a%20b?x=1&y=2\n")
-    code, out = project.run("run", "-p", str(free_port()), "--dry-run")
+    code, out = project.run("browser", "run", "-p", str(free_port()), "--dry-run")
     assert code == 0, out
     assert browser_line(out).endswith('"https://app.example.com/a%20b?x=1&y=2"')
 
 def test_browser_invalid_url(project):
-    code, out = project.run("run", "app.example.com", "--dry-run")
+    code, out = project.run("browser", "run", "app.example.com", "--dry-run")
     assert code == 1
     assert 'Invalid URL "app.example.com"' in out
 
 
 def test_browser_not_found(project):
-    code, out = project.run("run", "-b", "C:\\nope\\browser.exe", "--dry-run")
+    code, out = project.run("browser", "run", "-b", "C:\\nope\\browser.exe", "--dry-run")
     assert code == 1
     assert "not found" in out
 
 
-def test_browser_only(project):
-    port = free_port()
-    code, out = project.run("browser", "run", "-p", str(port), "--dry-run")
+class Listener:
+    """A process listening on a free port, with "rules_file=..." in its command line like the gremlin proxy."""
+
+    def __init__(self, rules: str | None):
+        code = textwrap.dedent("""
+            import socket, sys, time
+            s = socket.socket()
+            s.bind(("127.0.0.1", 0))
+            s.listen()
+            print(s.getsockname()[1], flush=True)
+            time.sleep(120)
+        """)
+        args = [sys.executable, "-c", code] + (["--set", f"rules_file={rules}"] if rules else [])
+        self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, text=True)
+        self.port = int(self.proc.stdout.readline())
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.proc.kill()
+        self.proc.wait()
+
+
+def test_browser_reuses_proxy_with_the_same_rules(project):
+    with Listener(str(project.root / "rules" / "rules.json")) as proxy:
+        code, out = project.run("browser", "run", "-p", str(proxy.port), "--dry-run")
     assert code == 0, out
+    assert f"Proxy is already listening on port {proxy.port}" in out
     assert "mitmdump" not in out.lower()
-    assert f"No proxy on port {port}" in out
-    assert f"--proxy-server=127.0.0.1:{port}" in browser_line(out)
+    assert f"--proxy-server=127.0.0.1:{proxy.port}" in browser_line(out)
 
 
-def test_browser_only_with_running_proxy(project):
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        s.listen()
-        port = s.getsockname()[1]
-        code, out = project.run("browser", "run", "-p", str(port), "--dry-run")
-    assert code == 0, out
-    assert "No proxy" not in out
-    browser_line(out)
+def test_browser_refuses_proxy_with_other_rules(project):
+    # the profile asks for other rules than the running proxy has: reusing it would silently apply the wrong ones
+    (project.root / "rules" / "staging.json").write_text("[]")
+    project.profile("staging", "MITM_RULES=rules/staging.json\n")
+    with Listener(str(project.root / "rules" / "rules.json")) as proxy:
+        code, out = project.run("browser", "run", "-e", "staging", "-p", str(proxy.port), "--dry-run")
+    assert code == 1, out
+    assert f"A proxy with other rules is already running on port {proxy.port}" in out
+    assert "rules.json" in out and "staging.json" in out
+    assert "--proxy-server=" not in out
 
 
-@pytest.mark.parametrize("option", [("-w",), ("-r", "rules.json")])
-def test_browser_only_rejects_proxy_options(project, option):
-    code, out = project.run("browser", "run", *option, "--dry-run")
-    assert code == 1
-    assert f"{option[0]} is a proxy option" in out
-    assert "Usage: gremlin browser run" in out
-
-
-def test_browser_reuses_running_proxy(project):
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        s.listen()
-        port = s.getsockname()[1]
-        code, out = project.run("run", "-p", str(port), "--dry-run")
-    assert code == 0, out
-    assert f"Proxy is already listening on port {port}" in out
-    assert "mitmdump" not in out.lower()
+def test_browser_refuses_port_of_another_program(project):
+    with Listener(None) as other:
+        code, out = project.run("browser", "run", "-p", str(other.port), "--dry-run")
+    assert code == 1, out
+    assert f"Port {other.port} is used by python" in out
+    assert "--proxy-server=" not in out
 
 
 def test_browser_unknown_option(project):
-    code, out = project.run("run", "--bogus")
+    code, out = project.run("browser", "run", "--bogus")
     assert code == 1
     assert "Unknown option: --bogus" in out
 
@@ -363,10 +378,11 @@ def test_browser_unknown_option(project):
 def test_gremlin_help(project, args):
     code, out = project.run(*args)
     assert code == 1
-    assert all(c in out for c in ("gremlin run", "gremlin proxy run", "gremlin browser run", "gremlin phone run"))
+    assert all(c in out for c in ("gremlin browser run", "gremlin proxy run", "gremlin mobile run"))
+    assert "gremlin run" not in out and "phone run" not in out
 
 
-@pytest.mark.parametrize("args", [("proxy",), ("proxy", "stop"), ("phone",), ("nope",)])
+@pytest.mark.parametrize("args", [("proxy",), ("proxy", "stop"), ("mobile",), ("run",), ("phone", "run"), ("nope",)])
 def test_gremlin_unknown_command(project, args):
     code, out = project.run(*args)
     assert code == 1
@@ -383,7 +399,7 @@ def test_gremlin_passes_quoted_arguments_unchanged(project):
     # spaces, % and & inside a quoted argument survive the extra hop through gremlin.bat;
     # the space also makes subprocess quote the URL, as a user would in cmd
     (project.root / "rules" / "my rules.json").write_text("[]", encoding="ascii")
-    code, out = project.run("run", "https://app.example.com/a%20b c?x=1&y=2",
+    code, out = project.run("browser", "run", "https://app.example.com/a%20b c?x=1&y=2",
                             "-r", str(project.root / "rules" / "my rules.json"),
                             "-p", str(free_port()), "--dry-run")
     assert code == 0, out

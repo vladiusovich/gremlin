@@ -63,5 +63,5 @@ echo [ok] Certificate installed. Restart browsers that are already open.
 
 :done
 echo.
-echo Done. To start the proxy and a browser through it: gremlin run
+echo Done. To start the proxy and a browser through it: gremlin browser run
 exit /b 0

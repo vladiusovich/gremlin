@@ -9,7 +9,7 @@ rem   -e, --env NAME         settings profile env\NAME.env (default env\default.
 rem   -p, --port PORT        listen port (default 8080)
 rem   -r, --rules FILE       rules file for mock_errors.py (default rules\rules.json)
 rem   -w, --web              use mitmweb (traffic UI at http://127.0.0.1:8081) instead of mitmdump
-rem   -g, --wireguard        also run a WireGuard server for phones (gremlin phone run = -g -w)
+rem   -g, --wireguard        also run a WireGuard server for phones (gremlin mobile run = -g -w)
 rem   --wg-port PORT         WireGuard UDP port (default 51820)
 rem   --dry-run              print the command without running it
 rem

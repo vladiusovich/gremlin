@@ -114,12 +114,12 @@ You can edit and save the rules file while everything is running: changes apply 
 Open a console in the project folder: click the Explorer address bar, type `cmd` and press `Enter`. Then run the profile by its name, without `.env`:
 
 ```bat
-gremlin run -e staging
+gremlin browser run -e staging
 ```
 
-For the `default` profile it is just `gremlin run`.
+For the `default` profile it is just `gremlin browser run`.
 
-> In PowerShell (e.g. the VS Code terminal) type `.\gremlin run -e staging`, in Git Bash `./gremlin.bat run -e staging`. Details: [Consoles](#consoles). `gremlin` without arguments lists all commands.
+> In PowerShell (e.g. the VS Code terminal) type `.\gremlin browser run -e staging`, in Git Bash `./gremlin.bat browser run -e staging`. Details: [Consoles](#consoles). `gremlin` without arguments lists all commands.
 
 Two windows open:
 
@@ -130,9 +130,9 @@ Now do the action in the app (e.g. create an order) and check how the UI handles
 
 **To stop**: close the browser window, then press `Ctrl+C` in the proxy window (or just close it).
 
-**To switch to another profile**: stop first (close **both** windows), then run the other profile. If the proxy window of the previous profile is still open on the same port, the new run reuses that proxy, and with it the **previous profile's rules** (the console says `Proxy is already listening on port …`).
+**To switch to another profile**: stop first (close **both** windows), then run the other profile. If a proxy is already running on the port, `gremlin browser run` reuses it only when it has the same rules file (the console says `Proxy is already listening on port …`). A proxy with other rules, e.g. the previous profile's, stops the run with `A proxy with other rules is already running on port …`: close that proxy window first, or give the profiles different ports.
 
-**To start the proxy and the browser separately** (e.g. to keep the proxy log in your own console, or to restart only the browser): run `gremlin proxy run` in one console and `gremlin browser run` in another, with the same profile or port. See [Command-line options](#command-line-options).
+**To start the proxy and the browser separately** (e.g. to keep the proxy log in your own console, or to restart only the browser): run `gremlin proxy run` in one console and `gremlin browser run` in another, with the same profile. `gremlin browser run` finds the running proxy and only opens the browser. See [Command-line options](#command-line-options).
 
 ## Consoles
 
@@ -140,11 +140,11 @@ Now do the action in the app (e.g. create an order) and check how the UI handles
 
 | Console | How to open it in the project folder | Command |
 | --- | --- | --- |
-| Command Prompt (`cmd`) | Explorer address bar → type `cmd` → `Enter` | `gremlin run -e staging` |
-| PowerShell | Explorer address bar → type `powershell` → `Enter` | `.\gremlin run -e staging` |
-| Windows Terminal | Right click in the folder → *Open in Terminal* (opens PowerShell by default) | `.\gremlin run -e staging` |
-| VS Code terminal | *Terminal → New Terminal* (PowerShell by default; switch with the `+ ˅` menu → *Command Prompt*) | PowerShell: `.\gremlin run -e staging`, cmd: `gremlin run -e staging` |
-| Git Bash | Right click in the folder → *Open Git Bash here* | `./gremlin.bat run -e staging` |
+| Command Prompt (`cmd`) | Explorer address bar → type `cmd` → `Enter` | `gremlin browser run -e staging` |
+| PowerShell | Explorer address bar → type `powershell` → `Enter` | `.\gremlin browser run -e staging` |
+| Windows Terminal | Right click in the folder → *Open in Terminal* (opens PowerShell by default) | `.\gremlin browser run -e staging` |
+| VS Code terminal | *Terminal → New Terminal* (PowerShell by default; switch with the `+ ˅` menu → *Command Prompt*) | PowerShell: `.\gremlin browser run -e staging`, cmd: `gremlin browser run -e staging` |
+| Git Bash | Right click in the folder → *Open Git Bash here* | `./gremlin.bat browser run -e staging` |
 
 - **Why `.\` in PowerShell**: PowerShell never runs programs from the current folder by name alone, so `gremlin` alone gives *"The term 'gremlin' is not recognized"*. `.\gremlin` means "the one in this folder". Git Bash is the same, and also needs the `.bat` extension.
 - **Double-click** works only for `install.bat`. `gremlin.bat` needs a command, so a double-click just shows the help and closes the window.
@@ -157,11 +157,11 @@ A URL with `&` (e.g. `https://app.example.com/?a=1&b=2`) needs care, because `&`
 
 | Console | How to pass it |
 | --- | --- |
-| cmd | In double quotes: `gremlin run "https://app.example.com/?a=1&b=2"` |
-| PowerShell | PowerShell drops the quotes before cmd sees them, so add a second pair: `.\gremlin run '"https://app.example.com/?a=1&b=2"'`, or stop PowerShell parsing with `--%`: `.\gremlin --% run "https://app.example.com/?a=1&b=2"` |
+| cmd | In double quotes: `gremlin browser run "https://app.example.com/?a=1&b=2"` |
+| PowerShell | PowerShell drops the quotes before cmd sees them, so add a second pair: `.\gremlin browser run '"https://app.example.com/?a=1&b=2"'`, or stop PowerShell parsing with `--%`: `.\gremlin --% browser run "https://app.example.com/?a=1&b=2"` |
 | Git Bash | There is no reliable way to pass it on the command line: put the URL in a profile |
 
-The way that works everywhere: put the URL into a profile as `MITM_URL=https://app.example.com/?a=1&b=2` (no quotes) and run `gremlin run -e <profile>`. URLs without `&` (with `?`, `=`, `%20`, …) can be passed in double quotes in any console.
+The way that works everywhere: put the URL into a profile as `MITM_URL=https://app.example.com/?a=1&b=2` (no quotes) and run `gremlin browser run -e <profile>`. URLs without `&` (with `?`, `=`, `%20`, …) can be passed in double quotes in any console.
 
 ## Several profiles and rule sets
 
@@ -176,22 +176,22 @@ env\                              rules\
 ```
 
 ```bat
-gremlin run -e trade
-gremlin run -e auth
+gremlin browser run -e trade
+gremlin browser run -e auth
 ```
 
 - Several profiles may point to the same rules file, e.g. the same scenarios on two stands.
 - To run two profiles **at the same time**, give them different ports (`MITM_PORT=8080` and `MITM_PORT=8081`); each gets its own proxy window and browser window.
 - Profiles and rule files are personal and are not committed to git; only `env\example.env` and `rules\examples.json` are shared. To share a scenario, send the rules file or add it to `rules\examples.json`.
 
-For a one-off change you do not need to edit the profile: command-line options override it, e.g. `gremlin run -e staging -w` additionally opens a web UI with all traffic. See [Command-line options](#command-line-options).
+For a one-off change you do not need to edit the profile: command-line options override it, e.g. `gremlin browser run -e staging -w` additionally opens a web UI with all traffic. See [Command-line options](#command-line-options).
 
 ## Phones (Android, iOS)
 
 A mobile app on a real phone, e.g. a React + Capacitor app, goes through the same proxy and the same rules. The phone connects to the computer as a **VPN**: mitmproxy runs a WireGuard server, the phone runs the official WireGuard app, and while the tunnel is on all the phone's traffic goes through the proxy. Nothing has to be configured in the phone's Wi-Fi settings, and it works for apps that ignore the system proxy.
 
 ```bat
-gremlin phone run -e mobile
+gremlin mobile run -e mobile
 ```
 
 This is `gremlin proxy run` plus WireGuard on UDP port `51820`, started as mitmweb, which shows the QR code for the phone. The regular proxy keeps running on `MITM_PORT` next to it, so `gremlin browser run` with the same profile works at the same time.
@@ -201,13 +201,13 @@ This is `gremlin proxy run` plus WireGuard on UDP port `51820`, started as mitmw
 The WireGuard keys are saved in `%USERPROFILE%\.mitmproxy\wireguard.conf` on the first start, so the phone is set up once and keeps working across restarts.
 
 1. **Network.** The phone and the computer must be on the same Wi-Fi (or the computer on a cable in the same network). Guest and some office networks block devices from seeing each other: use another network or the phone's hotspot. In Windows the network must be *Private* (*Settings → Network & internet → Wi-Fi → the network → Private network*).
-2. **Firewall.** On the first `gremlin phone run` Windows asks whether `mitmweb.exe` may use the network: tick *Private networks* and click *Allow*. If the dialog was dismissed, allow the port from an admin console:
+2. **Firewall.** On the first `gremlin mobile run` Windows asks whether `mitmweb.exe` may use the network: tick *Private networks* and click *Allow*. If the dialog was dismissed, allow the port from an admin console:
 
    ```bat
    netsh advfirewall firewall add rule name="gremlin WireGuard" dir=in action=allow protocol=UDP localport=51820
    ```
 
-3. **Tunnel.** Run `gremlin phone run`. mitmweb opens in the browser: go to the *Capture* tab, the *WireGuard* section shows a QR code. On the phone install **WireGuard** (Google Play / App Store), tap *+* → *Scan from QR code*, name the tunnel `gremlin` and allow the VPN.
+3. **Tunnel.** Run `gremlin mobile run`. mitmweb opens in the browser: go to the *Capture* tab, the *WireGuard* section shows a QR code. On the phone install **WireGuard** (Google Play / App Store), tap *+* → *Scan from QR code*, name the tunnel `gremlin` and allow the VPN.
 4. **Certificate.** Turn the tunnel on and open **<http://mitm.it>** in the phone's browser (the page is served by the proxy, so it opens only through the tunnel).
    - **iOS:** tap the iOS certificate → *Allow*. Then *Settings → Profile Downloaded → Install*. Then **also** *Settings → General → About → Certificate Trust Settings* → turn on *mitmproxy*. Without this last step HTTPS fails.
    - **Android:** download the Android certificate. Then *Settings → Security → Encryption & credentials → Install a certificate → CA certificate* → *Install anyway* → pick the downloaded file. Menu names differ between vendors: search the settings for "CA certificate". Tapping the downloaded file does not install it on Android 11+.
@@ -215,7 +215,7 @@ The WireGuard keys are saved in `%USERPROFILE%\.mitmproxy\wireguard.conf` on the
 
 ### Every day
 
-1. `gremlin phone run -e mobile`;
+1. `gremlin mobile run -e mobile`;
 2. on the phone, turn the `gremlin` tunnel on in WireGuard;
 3. test in the app: requests appear in mitmweb, mocked ones also in the console as `MOCK 500 POST https://…`;
 4. when done, **turn the tunnel off** first, then stop the proxy (`Ctrl+C`). While the tunnel is on and the proxy is not running, the phone has no internet.
@@ -277,7 +277,7 @@ A profile is an `env/<name>.env` file. `env/default.env` is loaded when no `-e` 
 | `MITM_RULES` | optional | `rules/rules.json` | Rules file; a relative path is resolved against the project root. The default file is created if missing, any other file must exist |
 | `MITM_WEB` | optional | `0` | `1` = run mitmweb (traffic UI at <http://127.0.0.1:8081>) instead of mitmdump |
 | `MITM_INSECURE` | optional | `0` | `1` = ignore certificate errors in the browser (if `gremlin install` was not run) |
-| `MITM_WIREGUARD` | optional | `0` | `1` = also run a WireGuard server for phones, see [Phones](#phones-android-ios). `gremlin phone run` turns it on regardless |
+| `MITM_WIREGUARD` | optional | `0` | `1` = also run a WireGuard server for phones, see [Phones](#phones-android-ios). `gremlin mobile run` turns it on regardless |
 | `MITM_WG_PORT` | optional | `51820` | WireGuard UDP port, `1`-`65535`; used only with WireGuard on |
 
 Booleans accept `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`.
@@ -291,10 +291,12 @@ Booleans accept `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`.
 
 All arguments are optional. Options override the values from the profile and are validated the same way.
 
-### `gremlin run`: proxy + browser
+### `gremlin browser run`: proxy + browser
+
+Starts `gremlin proxy run` in a separate window if nothing listens on the port yet, waits for it and opens the browser through it. A proxy already running on the port is reused if it has the same rules file; if it has other rules, or the port is taken by another program, the command stops with an error instead of opening a browser through the wrong proxy.
 
 ```text
-gremlin run [URL] [options]
+gremlin browser run [URL] [options]
 ```
 
 | Option | Profile key | Default | Description |
@@ -312,24 +314,14 @@ Examples:
 
 ```bat
 :: deployed app on a real domain, without a profile
-gremlin run https://app.example.com/
+gremlin browser run https://app.example.com/
 
 :: profile, but Edge on another port with a separate rule set
-gremlin run -e staging -b edge -p 8081 -r rules\trade-errors.json
+gremlin browser run -e staging -b edge -p 8081 -r rules\trade-errors.json
 
 :: see all requests and responses in a web UI
-gremlin run -w
+gremlin browser run -w
 ```
-
-### `gremlin browser run`: browser only
-
-Opens only the browser, pointed at a proxy that is already running, e.g. one started with `gremlin proxy run` in another console. If nothing listens on the port, it warns and opens the browser anyway: pages will not load until the proxy is up.
-
-```text
-gremlin browser run [URL] [-e profile] [-b chrome|edge|path] [-p PORT] [-k] [--dry-run]
-```
-
-The options are the same as in `gremlin run`, except `-r` and `-w`: they configure the proxy, so they are refused here.
 
 ### `gremlin proxy run`: proxy only
 
@@ -339,7 +331,7 @@ Runs the proxy in the current console: for `gremlin browser run` in another cons
 gremlin proxy run [-e profile] [-p PORT] [-r rules.json] [-w] [-g] [--wg-port PORT] [--dry-run]
 ```
 
-It uses the `MITM_PORT`, `MITM_RULES`, `MITM_WEB`, `MITM_WIREGUARD` and `MITM_WG_PORT` keys of the profile; `-e`, `-p`, `-r` and `-w` mean the same as in `gremlin run`.
+It uses the `MITM_PORT`, `MITM_RULES`, `MITM_WEB`, `MITM_WIREGUARD` and `MITM_WG_PORT` keys of the profile; `-e`, `-p`, `-r` and `-w` mean the same as in `gremlin browser run`.
 
 | Option | Profile key | Default | Description |
 | --- | --- | --- | --- |
@@ -352,12 +344,12 @@ curl -x http://127.0.0.1:8080 https://app.example.com/api/v2/trade
 
 For Postman, set the proxy to `127.0.0.1:8080` in *Settings → Proxy*. Any client that uses the Windows certificate store trusts the proxy after `gremlin install`. For other clients, point them to `%USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.pem`.
 
-### `gremlin phone run`: proxy + WireGuard for phones
+### `gremlin mobile run`: proxy + WireGuard for phones
 
 The same as `gremlin proxy run -g -w`: the proxy with a WireGuard server, started as mitmweb so the QR code for the phone is in the *Capture* tab. Runs in the current console, stop it with `Ctrl+C`. Setup and Capacitor specifics: [Phones](#phones-android-ios).
 
 ```text
-gremlin phone run [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
+gremlin mobile run [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
 ```
 
 ### `gremlin install` (`install.bat`)
@@ -467,7 +459,7 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | Symptom | Cause / fix |
 | --- | --- |
 | `NET::ERR_CERT_AUTHORITY_INVALID` | The certificate is not trusted: run `gremlin install` and restart the browser, or set `MITM_INSECURE=1` / use `-k` |
-| Requests do not appear in the proxy log | The page is open in your regular browser instead of the one started by `gremlin run` / `gremlin browser run`, or the proxy is on another port |
+| Requests do not appear in the proxy log | The page is open in your regular browser instead of the one started by `gremlin browser run`, or the proxy is on another port |
 | Nothing is mocked at all | `rules/rules.json` is empty (`[]`) after the first run: add rules, see [3. Create the rules file for the profile](#3-create-the-rules-file-for-the-profile). Also check the proxy log for which rules file is loaded |
 | Rule does not match | Compare the `url` pattern with the URL in the proxy log: scheme, port and trailing slash matter. Check `method` and `enabled` |
 | Mocked response visible in the proxy log, but the app gets `TypeError: Failed to fetch` | CORS: make sure `cors` is not `false` |
@@ -479,8 +471,8 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | `[!!] Invalid port / Invalid value / Invalid URL / Browser … not found` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
 | `'gremlin' is not recognized …` / `The term 'gremlin' is not recognized …` | The console is not in the project folder, or it is PowerShell / Git Bash, which need `.\gremlin` / `./gremlin.bat`. See [Consoles](#consoles) |
 | `Invalid URL "1"` and `'…' is not recognized as an internal or external command` | The URL contains `&` and the console did not keep it quoted. See [URLs with `&`](#urls-with-) |
-| `[!!] -r is a proxy option` / `-w is a proxy option` | `gremlin browser run` does not start the proxy; pass these to `gremlin proxy run` or use `gremlin run` |
-| `[warn] No proxy on port …` | `gremlin browser run` found nothing on the port: start `gremlin proxy run` (with the same `-p`) or use `gremlin run` |
+| `[!!] A proxy with other rules is already running on port …` | A proxy started with another profile or `-r` is still running on this port. Stop it (`Ctrl+C` in its window) and run again, or use another `-p` / `MITM_PORT` |
+| `[!!] Port … is used by …, not by the gremlin proxy` | Another program listens on the port: close it or use another `-p` / `MITM_PORT` |
 | Proxy window shows `address already in use` | The port is taken; set another `MITM_PORT` or use `-p` |
 | mitmweb UI does not open / port conflict | mitmweb uses port `8081` for its UI; do not run the proxy itself on `8081` together with `MITM_WEB=1` / `-w` |
 | mitmweb UI answers `403` or asks for a token | Open the UI by the link with `?token=…` printed in the console when mitmweb starts (mitmweb normally opens it by itself) |
@@ -515,7 +507,7 @@ Typical uses:
                    (server not asked)    changed response ◄──┘
 ```
 
-1. `gremlin run` reads the profile, starts `gremlin proxy run` in a separate window if nothing listens on the port yet, and waits for the proxy to come up.
+1. `gremlin browser run` reads the profile, starts `gremlin proxy run` in a separate window if nothing listens on the port yet, and waits for the proxy to come up. To tell whether the port is taken it checks the listening sockets (`lib/port-owner.ps1`), not a test connection, and it recognizes a gremlin proxy and its rules file by the `rules_file=` in the process command line.
 2. `gremlin proxy run` runs mitmdump (or mitmweb) with every addon from `addons/` and the rules file.
 3. The browser is started with a **separate profile** in `%TEMP%\mitm-profile-<browser>-<port>` and the flags:
    - `--proxy-server=127.0.0.1:<port>`: all HTTP/HTTPS traffic goes through the proxy;
@@ -525,7 +517,7 @@ Typical uses:
    The separate profile is required: if the regular browser is already open, a new launch only opens a tab in it and ignores the flags. It also keeps your main profile clean. Cookies and logins in the dedicated profile survive between runs; each browser and port pair has its own profile, so several setups can run side by side.
 4. For HTTPS, mitmproxy decrypts the traffic with its own certificate, which is why `gremlin install` makes Windows trust it.
 5. For every request `mock_errors.py` checks the rules top to bottom, and the first match decides. With `mock` it produces a fake response (or a delay/timeout/dropped connection), and the request never reaches the server. With `request` it changes the request and sends it on; with `response` it remembers the rule and changes the server's answer when it arrives (the `response` hook of mitmproxy). Compressed bodies are decompressed and compressed back, `Content-Length` is updated. Requests without a match pass through unchanged.
-6. For phones, `gremlin phone run` starts mitmproxy with two modes: `--mode regular` (the usual proxy on `MITM_PORT`) and `--mode wireguard@51820`. The phone's WireGuard app sends all its traffic to the computer through an encrypted UDP tunnel, mitmproxy takes it out of the tunnel and handles it like any other request. The phone needs nothing else configured, and apps that ignore the system proxy are covered too.
+6. For phones, `gremlin mobile run` starts mitmproxy with two modes: `--mode regular` (the usual proxy on `MITM_PORT`) and `--mode wireguard@51820`. The phone's WireGuard app sends all its traffic to the computer through an encrypted UDP tunnel, mitmproxy takes it out of the tunnel and handles it like any other request. The phone needs nothing else configured, and apps that ignore the system proxy are covered too.
 
 ### Why CORS headers
 
@@ -538,13 +530,12 @@ gremlin/
 ├── README.md
 ├── .gitignore           # keeps personal env profiles and rule sets out of git
 ├── .gitattributes       # keeps CRLF line endings in *.bat
-├── gremlin.bat          # entry point: gremlin run | proxy run | browser run | phone run | install | test
+├── gremlin.bat          # entry point: gremlin browser run | proxy run | mobile run | install | test
 ├── install.bat          # install mitmproxy and trust its certificate (gremlin install)
 ├── run_tests.bat        # run the tests in .venv (gremlin test, see Tests)
 ├── commands/            # the scripts behind gremlin's commands
-│   ├── proxy-run.bat    # gremlin proxy run: the proxy with all addons (current console)
-│   └── run.bat          # gremlin run: start the proxy if needed + open a browser through it;
-│                        #   gremlin browser run: the same, browser only (--no-proxy-start)
+│   ├── browser-run.bat  # gremlin browser run: start the proxy if needed + open a browser through it
+│   └── proxy-run.bat    # gremlin proxy run / mobile run: the proxy with all addons (current console)
 ├── requirements-dev.txt # test dependencies
 ├── pytest.ini
 ├── tests/               # pytest suite
@@ -560,6 +551,7 @@ gremlin/
 └── lib/                 # internal helpers, not meant to be run directly
     ├── find-mitmdump.bat
     ├── load-env.bat     # reads env/<name>.env
+    ├── port-owner.ps1   # what listens on the port: nothing, a gremlin proxy (with which rules) or another program
     └── validate.bat     # checks port and boolean values
 ```
 
@@ -602,7 +594,7 @@ The run ends with a summary such as `340 passed in 53.85s`. On a failure pytest 
 | `tests/test_modify.py` | Changing the request and the response: JSON Merge Patch, `json`, `body`, `query`, `headers`, `form`, `replace`, `method`, `url`, `status`, `delay`, gzip bodies, order of changes, warnings when a change does not fit the body, log lines, failures |
 | `tests/test_mocking.py` | Matching (`url` wildcards, `method`, `query`, first match wins) and the mocked response (status, body, `content_type`, `headers`, CORS, `delay`, `timeout`, `kill`, passing through on a failure) |
 | `tests/test_e2e.py` | A real mitmdump with the addon between an HTTP client and a local server: passthrough, mock without reaching the server, changed request as the server sees it (JSON, query, headers, form, method, URL), changed response (including gzip), both together, kill, timeout, delay, hot reload, broken rules do not stop the proxy, WireGuard mode next to the regular proxy |
-| `tests/test_scripts.py` | `gremlin run`, `gremlin proxy run`, `gremlin browser run` and `gremlin phone run` via `--dry-run` in a temp copy of the project: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery, WireGuard options, routing of `gremlin` commands |
+| `tests/test_scripts.py` | `gremlin browser run`, `gremlin proxy run` and `gremlin mobile run` via `--dry-run` in a temp copy of the project: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery, WireGuard options, reusing or refusing a proxy already on the port, routing of `gremlin` commands |
 
 When adding a rule field, a change in `request` / `response` or a profile key, add a test next to the existing ones for that layer.
 
