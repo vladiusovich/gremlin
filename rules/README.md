@@ -700,7 +700,7 @@ The old format follows the same rules as `mock`: `error` together with `request`
 
 ## Organizing rule files
 
-- One file per scenario (`rules/trade-errors.json`, `rules/validation.json`, …), selected with `MITM_RULES` in a profile or `-r`.
+- Each profile uses `rules/<profile>.json` by default. For scenarios shared between profiles use one file per scenario (`rules/trade-errors.json`, `rules/validation.json`, …), selected by short name with `MITM_RULES` in a profile or `-r`: `-r trade-errors`. Subfolders group scenarios by feature: `-r trade/errors` is `rules/trade/errors.json`.
 - To turn a rule off temporarily, set `"enabled": false` instead of deleting it.
 - An entry with only `comment` is a note, not a rule. Use it to split a file into groups; it does not shift the numbering of the other rules (rule numbers are positions in the file):
 

@@ -5,7 +5,7 @@ server ("mock"), or changes the real request and/or the real server response ("r
 
 Run:
   gremlin proxy run
-  (or manually: mitmdump -s addons/mock_errors.py --set rules_file=rules/rules.json)
+  (or manually: mitmdump -s addons/mock_errors.py --set rules_file=rules/default.json)
 
 The rules file is reloaded automatically when it changes (no need to restart mitmproxy).
 Format: see rules/README.md and the schema below, examples: rules/examples.json.

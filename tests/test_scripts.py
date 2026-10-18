@@ -1,7 +1,7 @@
 """The gremlin commands: profiles, validation and command-line options, checked through --dry-run.
 
 They run through the platform's entry point (gremlin.bat on Windows, gremlin on Linux) in a copy of
-the project in a temp folder, so env/ and rules/ of the real checkout are never touched. Fake browser
+the project in a temp folder, so profiles/ and rules/ of the real checkout are never touched. Fake browser
 executables on PATH stand in for Chrome and Edge, so the tests do not depend on what is installed.
 """
 import os
@@ -47,13 +47,21 @@ class Project:
             exe.write_text("")
             exe.chmod(0o755)
             self.browsers[key] = str(exe)
-        (root / "env").mkdir()
+        (root / "profiles").mkdir()
         (root / "rules").mkdir()
         (root / "addons").mkdir()
         shutil.copy(ROOT / "addons" / "mock_errors.py", root / "addons")
 
-    def profile(self, name: str, text: str):
-        (self.root / "env" / f"{name}.env").write_text(text, encoding="ascii")
+    def profile(self, name: str, text: str, folder: str = "profiles"):
+        (self.root / folder).mkdir(exist_ok=True)
+        (self.root / folder / f"{name}.env").write_text(text, encoding="ascii")
+
+    def rules(self, name: str) -> Path:
+        """An empty rules file rules/<name>.json (subfolders included); returns its path."""
+        path = self.root / "rules" / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]", encoding="ascii")
+        return path
 
     def run(self, *args: str):
         env = dict(os.environ)
@@ -89,12 +97,12 @@ def test_defaults(project):
     cmd = command_line(out)
     assert "mitmdump" in cmd.lower()
     assert " -p 8080 " in cmd
-    assert quote(f"rules_file={project.root / 'rules' / 'rules.json'}") in cmd
-    assert f"An empty {os.path.join('rules', 'rules.json')} would be created" in out
+    assert quote(f"rules_file={project.root / 'rules' / 'default.json'}") in cmd
+    assert f"An empty {os.path.join('rules', 'default.json')} would be created" in out
     assert "--mode" not in cmd
     assert "WireGuard" not in out
     # --dry-run creates nothing
-    assert not (project.root / "rules" / "rules.json").exists()
+    assert not (project.root / "rules" / "default.json").exists()
 
 
 def test_all_addons_loaded_except_underscored(project):
@@ -140,7 +148,89 @@ def test_command_line_overrides_profile(project):
 def test_missing_profile(project):
     code, out = project.run("proxy", "run", "-e", "nope", "--dry-run")
     assert code == 1
-    assert f"Profile not found: {os.path.join('env', 'nope.env')}" in out
+    assert f"Profile not found: {os.path.join('profiles', 'nope.env')}" in out
+
+
+@pytest.mark.parametrize("flag", ["--profile", "-e", "--env", "--PROFILE"])
+def test_profile_option_and_its_old_names(project, flag):
+    project.profile("staging", "MITM_PORT=9005\n")
+    code, out = project.run("proxy", "run", flag, "staging", "--dry-run")
+    assert code == 0, out
+    assert " -p 9005 " in command_line(out)
+
+
+def test_profile_uses_its_own_rules_file(project):
+    project.profile("staging", "MITM_PORT=9006\n")
+    code, out = project.run("proxy", "run", "--profile", "staging", "--dry-run")
+    assert code == 0, out
+    assert quote(f"rules_file={project.root / 'rules' / 'staging.json'}") in command_line(out)
+    # missing: created empty, like the default one
+    assert f"An empty {os.path.join('rules', 'staging.json')} would be created" in out
+
+
+def test_default_profile_uses_default_rules_file(project):
+    project.rules("default")
+    project.profile("default", "MITM_PORT=9007\n")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 0, out
+    assert quote(f"rules_file={project.root / 'rules' / 'default.json'}") in command_line(out)
+    assert "would be created" not in out
+
+
+@pytest.mark.parametrize("name, parts", [("trade-errors", ("trade-errors.json",)),
+                                         ("trade/errors", ("trade", "errors.json"))])
+def test_rules_by_short_name(project, name, parts):
+    project.rules(name)
+    code, out = project.run("proxy", "run", "-r", name, "--dry-run")
+    assert code == 0, out
+    assert quote(f"rules_file={project.root.joinpath('rules', *parts)}") in command_line(out)
+
+
+def test_rules_by_short_name_in_profile(project):
+    project.rules("trade-errors")
+    project.profile("staging", "MITM_RULES=trade-errors\n")
+    code, out = project.run("proxy", "run", "--profile", "staging", "--dry-run")
+    assert code == 0, out
+    assert quote(f"rules_file={project.root / 'rules' / 'trade-errors.json'}") in command_line(out)
+
+
+def test_missing_rules_by_short_name(project):
+    # a short name that is not the profile's own file must exist: a typo is not created silently
+    code, out = project.run("proxy", "run", "-r", "trade-erors", "--dry-run")
+    assert code == 1
+    assert "Rules file not found:" in out and os.path.join("rules", "trade-erors.json") in out
+
+
+def test_profile_in_old_env_folder_still_works(project):
+    project.profile("staging", "MITM_PORT=9008\n", folder="env")
+    code, out = project.run("proxy", "run", "-e", "staging", "--dry-run")
+    assert code == 0, out
+    assert " -p 9008 " in command_line(out)
+    assert f"[warn] Profile {os.path.join('env', 'staging.env')} is in the old env folder: " \
+           f"move it to {os.path.join('profiles', 'staging.env')}" in out
+
+
+def test_profiles_folder_wins_over_old_env_folder(project):
+    project.profile("default", "MITM_PORT=9009\n")
+    project.profile("default", "MITM_PORT=9010\n", folder="env")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 0, out
+    assert " -p 9009 " in command_line(out)
+    assert "old env folder" not in out
+
+
+def test_old_default_rules_file_still_works(project):
+    project.rules("rules")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 0, out
+    assert quote(f"rules_file={project.root / 'rules' / 'rules.json'}") in command_line(out)
+    assert f"[warn] Using the old {os.path.join('rules', 'rules.json')}: " \
+           f"rename it to {os.path.join('rules', 'default.json')}" in out
+    # once default.json exists, it is used
+    project.rules("default")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert quote(f"rules_file={project.root / 'rules' / 'default.json'}") in command_line(out)
+    assert "[warn]" not in out
 
 
 def test_missing_non_default_rules_file(project):
@@ -357,7 +447,7 @@ class Listener:
 
 
 def test_browser_reuses_proxy_with_the_same_rules(project):
-    with Listener(str(project.root / "rules" / "rules.json")) as proxy:
+    with Listener(str(project.root / "rules" / "default.json")) as proxy:
         code, out = project.run("browser", "run", "-p", str(proxy.port), "--dry-run")
     assert code == 0, out
     assert f"Proxy is already listening on port {proxy.port}" in out
@@ -368,12 +458,12 @@ def test_browser_reuses_proxy_with_the_same_rules(project):
 def test_browser_refuses_proxy_with_other_rules(project):
     # the profile asks for other rules than the running proxy has: reusing it would silently apply the wrong ones
     (project.root / "rules" / "staging.json").write_text("[]")
-    project.profile("staging", "MITM_RULES=rules/staging.json\n")
-    with Listener(str(project.root / "rules" / "rules.json")) as proxy:
-        code, out = project.run("browser", "run", "-e", "staging", "-p", str(proxy.port), "--dry-run")
+    project.profile("staging", "")
+    with Listener(str(project.root / "rules" / "default.json")) as proxy:
+        code, out = project.run("browser", "run", "--profile", "staging", "-p", str(proxy.port), "--dry-run")
     assert code == 1, out
     assert f"A proxy with other rules is already running on port {proxy.port}" in out
-    assert "rules.json" in out and "staging.json" in out
+    assert "default.json" in out and "staging.json" in out
     assert "--proxy-server=" not in out
 
 

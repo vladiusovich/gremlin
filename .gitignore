@@ -1,6 +1,8 @@
 # Personal settings profiles; only the template is shared
-env/*.env
-!env/example.env
+profiles/*.env
+!profiles/example.env
+# Where profiles were kept before profiles/
+env/
 
 # Personal rule sets; only the examples are shared
 rules/*

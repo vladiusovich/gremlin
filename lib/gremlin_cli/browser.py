@@ -15,17 +15,18 @@ import time
 from pathlib import Path
 
 from . import profile, proxy
-from .common import (DEFAULT_RULES, MAIN, PROG, WINDOWS, detail, fail, find_mitmdump, info, is_on, ok,
+from .common import (MAIN, PROG, WINDOWS, detail, fail, find_mitmdump, info, is_on, ok,
                      parse_options, show, validate_bool, validate_port)
 from .ports import port_owner
 from .terminal import open_window
 
 BROWSERS = "chrome, edge" if WINDOWS else "chrome, chromium, edge"
-USAGE = (f"Usage: {PROG} browser run [URL] [-e profile] [-b {BROWSERS.replace(', ', '|')}|path] [-p PORT] "
-         "[-r rules.json] [-w] [-k] [--dry-run]")
+USAGE = (f"Usage: {PROG} browser run [URL] [--profile NAME] [-b {BROWSERS.replace(', ', '|')}|path] [-p PORT] "
+         "[-r RULES] [-w] [-k] [--dry-run]")
 
 OPTIONS = {
-    "-e": ("env", True), "--env": ("env", True),
+    # -e / --env: the old name of --profile, still accepted
+    "--profile": ("profile", True), "-e": ("profile", True), "--env": ("profile", True),
     "-b": ("browser", True), "--browser": ("browser", True),
     "-p": ("port", True), "--port": ("port", True),
     "-r": ("rules", True), "--rules": ("rules", True),
@@ -49,16 +50,14 @@ WINDOWS_NAMES = {
 
 def run(args: list[str]) -> int:
     opts = parse_options(args, OPTIONS, USAGE, positional="url")
-    if "rules" in opts:
-        opts["rules"] = os.path.abspath(opts["rules"])
-    settings, env_file = profile.load(opts.get("env"))
-    if env_file:
-        ok(f"Profile: {env_file}")
+    settings, profile_file = profile.load(opts.get("profile"))
+    if profile_file:
+        ok(f"Profile: {profile_file}")
 
     url = opts.get("url") or settings.get("MITM_URL") or "http://localhost:3001/"
     browser = opts.get("browser") or settings.get("MITM_BROWSER") or "chrome"
     port = opts.get("port") or settings.get("MITM_PORT") or "8080"
-    rules = opts.get("rules") or settings.get("MITM_RULES") or str(DEFAULT_RULES)
+    rules = profile.rules_for(opts.get("rules"), settings, profile_file)
     web = bool(opts.get("web")) or is_on(settings.get("MITM_WEB"))
     insecure = bool(opts.get("insecure")) or is_on(settings.get("MITM_INSECURE"))
     dry = bool(opts.get("dry"))
@@ -87,7 +86,7 @@ def run(args: list[str]) -> int:
              "Close that program or use another port: -p PORT (or MITM_PORT in the profile)")
     else:
         # Pass the profile on, so the proxy resolves its own settings (e.g. WireGuard) the same way
-        proxy_args = (["-e", opts["env"]] if opts.get("env") else []) + ["-p", port, "-r", rules]
+        proxy_args = (["--profile", opts["profile"]] if opts.get("profile") else []) + ["-p", port, "-r", rules]
         proxy_args += ["--web"] if web else []
         if dry:
             if proxy.run(proxy_args + ["--dry-run"]) != 0:

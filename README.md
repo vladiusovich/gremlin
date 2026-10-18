@@ -66,38 +66,31 @@ Questions are `[Y/n]`, where `Enter` means yes (the Python question in `install.
 
 ## 2. Create a profile
 
-A **profile** is a small text file in the `env` folder that says:
+A **profile** is a small text file in the `profiles` folder that says which site to open (`MITM_URL`) and, optionally, the browser and the proxy port.
 
-- which site to open (`MITM_URL`);
-- **which rules file to use** (`MITM_RULES`): the rules decide which requests get broken and how;
-- optionally the browser and the proxy port.
+The file name is the profile name: `profiles\staging.env` is the profile `staging`.
 
-The file name is the profile name: `env\staging.env` is the profile `staging`.
-
-1. Open the `env` folder.
+1. Open the `profiles` folder.
 2. Copy `example.env` (`Ctrl+C`, `Ctrl+V`) and rename the copy to the profile name, e.g. `staging.env`. Use Latin letters, digits, `-` and `_`, no spaces.
-3. Open it in a text editor (Windows: *right click → Open with → Notepad*) and set the two main lines:
+3. Open it in a text editor (Windows: *right click → Open with → Notepad*) and set the site:
 
    ```ini
    # Site to open in the browser
    MITM_URL=https://staging.example.com/
-
-   # Rules file for this profile: rules\staging.json
-   MITM_RULES=rules/staging.json
    ```
 
    Everything else in the file can stay as it is. Lines starting with `#` are comments.
 
 4. Save the file.
 
-> The profile named `default` (`env\default.env`) is special: it is used when no profile is specified. Use it for the setup you run most often.
+> The profile named `default` (`profiles\default.env`) is special: it is used when no profile is specified. Use it for the setup you run most often.
 
 ## 3. Create the rules file for the profile
 
-The profile and the rules file are linked **by the exact file name** in `MITM_RULES`: `MITM_RULES=rules/staging.json` means the file `rules\staging.json`. If the name does not match (a typo, a different extension, `.json.txt`), the script stops with `Rules file not found: …` and shows the path it looked for.
+The rules decide which requests get broken and how. Each profile has **its own rules file with the same name**: the profile `staging` uses `rules\staging.json`, the profile `default` uses `rules\default.json`. Nothing has to be set in the profile for that. On the first run a missing file is created empty, so you can also just run the profile once and then fill in the file.
 
 1. Open the `rules` folder.
-2. Create the file named exactly as in `MITM_RULES`, e.g. `staging.json` (Windows: *right click → New → Text Document*, then rename it including the extension).
+2. Create the file named like the profile, e.g. `staging.json` (Windows: *right click → New → Text Document*, then rename it including the extension; make sure it is not `staging.json.txt`).
 3. Open it in a text editor and describe the requests to intercept. A file with one rule:
 
    ```json
@@ -143,19 +136,19 @@ The profile and the rules file are linked **by the exact file name** in `MITM_RU
 
 You can edit and save the rules file while everything is running: changes apply to the next request, no restart needed. If the file has a mistake (a missing comma, a typo in a field name), the proxy window says which rule and which field is wrong, and the previous version of the rules stays active.
 
-> If a profile has no `MITM_RULES` line, it uses `rules\rules.json`, which is created empty automatically.
+> To use another rules file, e.g. one scenario shared by several profiles, set it in the profile: `MITM_RULES=trade-errors` means `rules\trade-errors.json`. See [Several profiles and rule sets](#several-profiles-and-rule-sets).
 
 ## 4. Run
 
 Open a console in the project folder (Windows: click the Explorer address bar, type `cmd` and press `Enter`; Linux: open a terminal and `cd` to the folder). Then run the profile by its name, without `.env`:
 
 ```bat
-gremlin browser run -e staging
+gremlin browser run --profile staging
 ```
 
-On Linux the same command is `./gremlin browser run -e staging`. For the `default` profile it is just `gremlin browser run`.
+On Linux the same command is `./gremlin browser run --profile staging`. For the `default` profile it is just `gremlin browser run`.
 
-> In PowerShell (e.g. the VS Code terminal) type `.\gremlin browser run -e staging`, in Git Bash `./gremlin.bat browser run -e staging`. Details: [Consoles](#consoles). `gremlin` without arguments lists all commands.
+> In PowerShell (e.g. the VS Code terminal) type `.\gremlin browser run --profile staging`, in Git Bash `./gremlin.bat browser run --profile staging`. Details: [Consoles](#consoles). `gremlin` without arguments lists all commands.
 
 Two windows open:
 
@@ -176,12 +169,12 @@ On Windows `gremlin` is a batch file (`gremlin.bat`), so it runs in any Windows 
 
 | Console | How to open it in the project folder | Command |
 | --- | --- | --- |
-| Command Prompt (`cmd`) | Explorer address bar → type `cmd` → `Enter` | `gremlin browser run -e staging` |
-| PowerShell | Explorer address bar → type `powershell` → `Enter` | `.\gremlin browser run -e staging` |
-| Windows Terminal | Right click in the folder → *Open in Terminal* (opens PowerShell by default) | `.\gremlin browser run -e staging` |
-| VS Code terminal | *Terminal → New Terminal* (PowerShell by default; switch with the `+ ˅` menu → *Command Prompt*) | PowerShell: `.\gremlin browser run -e staging`, cmd: `gremlin browser run -e staging` |
-| Git Bash | Right click in the folder → *Open Git Bash here* | `./gremlin.bat browser run -e staging` |
-| Linux (bash, zsh, …) | A terminal, then `cd` to the project folder | `./gremlin browser run -e staging` |
+| Command Prompt (`cmd`) | Explorer address bar → type `cmd` → `Enter` | `gremlin browser run --profile staging` |
+| PowerShell | Explorer address bar → type `powershell` → `Enter` | `.\gremlin browser run --profile staging` |
+| Windows Terminal | Right click in the folder → *Open in Terminal* (opens PowerShell by default) | `.\gremlin browser run --profile staging` |
+| VS Code terminal | *Terminal → New Terminal* (PowerShell by default; switch with the `+ ˅` menu → *Command Prompt*) | PowerShell: `.\gremlin browser run --profile staging`, cmd: `gremlin browser run --profile staging` |
+| Git Bash | Right click in the folder → *Open Git Bash here* | `./gremlin.bat browser run --profile staging` |
+| Linux (bash, zsh, …) | A terminal, then `cd` to the project folder | `./gremlin browser run --profile staging` |
 
 - **Why `.\` in PowerShell and `./` on Linux**: PowerShell and Linux shells never run programs from the current folder by name alone, so `gremlin` alone gives *"The term 'gremlin' is not recognized"* / *"command not found"*. `.\gremlin` / `./gremlin` means "the one in this folder". Git Bash is the same, and also needs the `.bat` extension.
 - **Linux: the proxy window** is opened in the first terminal emulator found: `$TERMINAL` (called as `$TERMINAL -e …`), then GNOME Terminal, Ptyxis, Konsole, Xfce Terminal, GNOME Console, kitty, Alacritty, WezTerm, foot, `x-terminal-emulator`, xterm. Without a desktop session (e.g. over SSH) there is no window to open: run `./gremlin proxy run` in one terminal and `./gremlin browser run` in another.
@@ -200,37 +193,41 @@ A URL with `&` (e.g. `https://app.example.com/?a=1&b=2`) needs care, because `&`
 | Git Bash | There is no reliable way to pass it on the command line: put the URL in a profile |
 | Linux | In single or double quotes: `./gremlin browser run 'https://app.example.com/?a=1&b=2'` |
 
-The way that works everywhere: put the URL into a profile as `MITM_URL=https://app.example.com/?a=1&b=2` (no quotes) and run `gremlin browser run -e <profile>`. URLs without `&` (with `?`, `=`, `%20`, …) can be passed in double quotes in any console.
+The way that works everywhere: put the URL into a profile as `MITM_URL=https://app.example.com/?a=1&b=2` (no quotes) and run `gremlin browser run --profile <profile>`. URLs without `&` (with `?`, `=`, `%20`, …) can be passed in double quotes in any console.
 
 ## Several profiles and rule sets
 
-Create as many profiles and rule files as you need: one per stand, per feature or per test scenario. Each profile points to its rules file by name:
+Create as many profiles and rule files as you need. A profile says **where** you test (a stand, its URL and port), a rules file says **what** you break (a scenario). By default each profile uses the rules file with its own name; `MITM_RULES` in the profile or `-r` on the command line picks another one:
 
 ```text
-env\                              rules\
-  default.env   ── MITM_RULES ──▶   rules.json          everyday local testing
-  staging.env   ── MITM_RULES ──▶   staging.json        staging stand
+profiles\                         rules\
+  default.env   ────────────────▶   default.json        everyday local testing
+  staging.env   ────────────────▶   staging.json        staging stand
   trade.env     ── MITM_RULES ──▶   trade-errors.json   trading error scenarios
   auth.env      ── MITM_RULES ──▶   auth-errors.json    login / session errors
 ```
 
 ```bat
-gremlin browser run -e trade
-gremlin browser run -e auth
+gremlin browser run --profile trade
+gremlin browser run --profile auth
+
+:: any stand with any scenario, without editing the profile
+gremlin browser run --profile staging -r trade-errors
 ```
 
+- A rules file is given by its **short name**, without the `rules` folder and `.json`: `MITM_RULES=trade-errors`, `-r trade-errors`. Subfolders work too, to group scenarios by feature: `-r trade/errors` is `rules\trade\errors.json`. A value ending in `.json` is a path (in the profile relative to the project folder, on the command line relative to the current folder).
 - Several profiles may point to the same rules file, e.g. the same scenarios on two stands.
 - To run two profiles **at the same time**, give them different ports (`MITM_PORT=8080` and `MITM_PORT=8081`); each gets its own proxy window and browser window.
-- Profiles and rule files are personal and are not committed to git; only `env\example.env` and `rules\examples.json` are shared. To share a scenario, send the rules file or add it to `rules\examples.json`.
+- Profiles and rule files are personal and are not committed to git; only `profiles\example.env` and `rules\examples.json` are shared. To share a scenario, send the rules file or add it to `rules\examples.json`.
 
-For a one-off change you do not need to edit the profile: command-line options override it, e.g. `gremlin browser run -e staging -w` additionally opens a web UI with all traffic. See [Command-line options](#command-line-options).
+For a one-off change you do not need to edit the profile: command-line options override it, e.g. `gremlin browser run --profile staging -w` additionally opens a web UI with all traffic. See [Command-line options](#command-line-options).
 
 ## Phones (Android, iOS)
 
 A mobile app on a real phone, e.g. a React + Capacitor app, goes through the same proxy and the same rules. The phone connects to the computer as a **VPN**: mitmproxy runs a WireGuard server, the phone runs the official WireGuard app, and while the tunnel is on all the phone's traffic goes through the proxy. Nothing has to be configured in the phone's Wi-Fi settings, and it works for apps that ignore the system proxy.
 
 ```bat
-gremlin mobile run -e mobile
+gremlin mobile run --profile mobile
 ```
 
 This is `gremlin proxy run` plus WireGuard on UDP port `51820`, started as mitmweb, which shows the QR code for the phone. The regular proxy keeps running on `MITM_PORT` next to it, so `gremlin browser run` with the same profile works at the same time.
@@ -256,7 +253,7 @@ The WireGuard keys are saved in `%USERPROFILE%\.mitmproxy\wireguard.conf` (Linux
 
 ### Every day
 
-1. `gremlin mobile run -e mobile`;
+1. `gremlin mobile run --profile mobile`;
 2. on the phone, turn the `gremlin` tunnel on in WireGuard;
 3. test in the app: requests appear in mitmweb, mocked ones also in the console as `MOCK 500 POST https://…`;
 4. when done, **turn the tunnel off** first, then stop the proxy (`Ctrl+C`). While the tunnel is on and the proxy is not running, the phone has no internet.
@@ -302,20 +299,20 @@ If the app already has a `network_security_config.xml` (e.g. to allow `http://` 
 ### Emulators
 
 - **Android emulator:** works the same way: install WireGuard in the emulator and add the tunnel from the QR code (or *Import from file* with the config that is also printed in the console). The computer is reachable from the emulator as `10.0.2.2`: if the tunnel does not connect, edit the tunnel's *Endpoint* to `10.0.2.2:51820`. A simpler alternative without WireGuard: start the emulator with `emulator -avd <name> -http-proxy 127.0.0.1:8080` next to `gremlin proxy run`. The certificate and the `network_security_config` are needed in both cases.
-- **iOS simulator:** runs only on macOS, and gremlin supports only Windows and Linux. The simulator has no VPN and uses the Mac's network settings, so on a Mac run `mitmweb -s addons/mock_errors.py --set rules_file=rules/rules.json`, set the Mac's HTTP/HTTPS proxy to `127.0.0.1:8080`, and drag `~/.mitmproxy/mitmproxy-ca-cert.pem` onto the simulator, then trust it as in step 4.
+- **iOS simulator:** runs only on macOS, and gremlin supports only Windows and Linux. The simulator has no VPN and uses the Mac's network settings, so on a Mac run `mitmweb -s addons/mock_errors.py --set rules_file=rules/default.json`, set the Mac's HTTP/HTTPS proxy to `127.0.0.1:8080`, and drag `~/.mitmproxy/mitmproxy-ca-cert.pem` onto the simulator, then trust it as in step 4.
 
 ---
 
 ## Settings profiles
 
-A profile is an `env/<name>.env` file. `env/default.env` is loaded when no `-e` is given; `-e <name>` loads `env/<name>.env`. Profiles are optional, and **every key in a profile is optional**: an omitted key falls back to its default.
+A profile is a `profiles/<name>.env` file. `profiles/default.env` is loaded when no `--profile` is given; `--profile <name>` loads `profiles/<name>.env`. Profiles are optional, and **every key in a profile is optional**: an omitted key falls back to its default.
 
 | Key | Required | Default | Allowed values |
 | --- | --- | --- | --- |
 | `MITM_URL` | optional | `http://localhost:3001/` | Start page, must start with `http://` or `https://` |
 | `MITM_BROWSER` | optional | `chrome` | `chrome`, `edge`, `chromium` (Linux) or a full path to a Chromium-based browser executable. On Linux `chrome` falls back to Chromium if Google Chrome is not installed |
 | `MITM_PORT` | optional | `8080` | Proxy port, `1`-`65535` |
-| `MITM_RULES` | optional | `rules/rules.json` | Rules file; a relative path is resolved against the project root. The default file is created if missing, any other file must exist |
+| `MITM_RULES` | optional | `rules/<profile>.json` | Rules file: a short name without `.json` is a file in `rules/` (`trade-errors`, `trade/errors`), a value ending in `.json` is a path, a relative one resolved against the project root. The profile's own file (`rules/<profile>.json`, `rules/default.json` without a profile) is created if missing, any other file must exist |
 | `MITM_WEB` | optional | `0` | `1` = run mitmweb (traffic UI at <http://127.0.0.1:8081>) instead of mitmdump |
 | `MITM_INSECURE` | optional | `0` | `1` = ignore certificate errors in the browser (if `gremlin install` was not run) |
 | `MITM_WIREGUARD` | optional | `0` | `1` = also run a WireGuard server for phones, see [Phones](#phones-android-ios). `gremlin mobile run` turns it on regardless |
@@ -326,7 +323,8 @@ Booleans accept `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`.
 - **Priority: command-line options > profile > built-in defaults.**
 - Format: `KEY=VALUE`, `#` starts a comment line (trailing comments are not supported). An empty value (`MITM_PORT=`) counts as not set.
 - Validation: an unknown key (a typo like `MITM_PROT`) is skipped with a `[warn]` listing the allowed keys, so a profile cannot override system variables such as `PATH` either. An invalid value (`MITM_PORT=abc`, `MITM_WEB=maybe`, a URL without scheme, a browser that does not exist) stops the script with an `[!!]` error that names the setting.
-- `env/example.env` is the shared template with all keys; your own profiles are ignored by git.
+- `profiles/example.env` is the shared template with all keys; your own profiles are ignored by git.
+- Before `profiles/`, profiles were kept in `env/` and the default rules in `rules/rules.json`. Both are still read, with a `[warn]` saying where to move the file; a profile in `profiles/` wins over one with the same name in `env/`.
 
 ## Command-line options
 
@@ -343,10 +341,10 @@ gremlin browser run [URL] [options]
 | Option | Profile key | Default | Description |
 | --- | --- | --- | --- |
 | `URL` | `MITM_URL` | `http://localhost:3001/` | Start page |
-| `-e`, `--env` | | `env/default.env`, if present | Profile `env/<name>.env` |
+| `--profile` (`-e`, `--env`) | | `profiles/default.env`, if present | Profile `profiles/<name>.env`. `-e` and `--env` are its old names and still work |
 | `-b`, `--browser` | `MITM_BROWSER` | `chrome` | `chrome`, `edge`, `chromium` (Linux) or a full path to a Chromium-based browser executable |
 | `-p`, `--port` | `MITM_PORT` | `8080` | Proxy port |
-| `-r`, `--rules` | `MITM_RULES` | `rules\rules.json` | Rules file (a relative path is resolved against the current folder) |
+| `-r`, `--rules` | `MITM_RULES` | `rules\<profile>.json` | Rules file: a short name (`trade-errors` = `rules\trade-errors.json`) or a path ending in `.json` (relative to the current folder) |
 | `-w`, `--web` | `MITM_WEB` | off | Start the proxy as **mitmweb**: a web UI with all traffic at <http://127.0.0.1:8081> |
 | `-k`, `--insecure` | `MITM_INSECURE` | off | Ignore certificate errors |
 | `--dry-run` | | | Print the commands without running anything |
@@ -358,7 +356,7 @@ Examples:
 gremlin browser run https://app.example.com/
 
 :: profile, but Edge on another port with a separate rule set
-gremlin browser run -e staging -b edge -p 8081 -r rules\trade-errors.json
+gremlin browser run --profile staging -b edge -p 8081 -r trade-errors
 
 :: see all requests and responses in a web UI
 gremlin browser run -w
@@ -369,10 +367,10 @@ gremlin browser run -w
 Runs the proxy in the current console: for `gremlin browser run` in another console, or for clients other than the browser (curl, Postman, …). Stop it with `Ctrl+C`.
 
 ```text
-gremlin proxy run [-e profile] [-p PORT] [-r rules.json] [-w] [-g] [--wg-port PORT] [--dry-run]
+gremlin proxy run [--profile NAME] [-p PORT] [-r RULES] [-w] [-g] [--wg-port PORT] [--dry-run]
 ```
 
-It uses the `MITM_PORT`, `MITM_RULES`, `MITM_WEB`, `MITM_WIREGUARD` and `MITM_WG_PORT` keys of the profile; `-e`, `-p`, `-r` and `-w` mean the same as in `gremlin browser run`.
+It uses the `MITM_PORT`, `MITM_RULES`, `MITM_WEB`, `MITM_WIREGUARD` and `MITM_WG_PORT` keys of the profile; `--profile`, `-p`, `-r` and `-w` mean the same as in `gremlin browser run`.
 
 | Option | Profile key | Default | Description |
 | --- | --- | --- | --- |
@@ -390,7 +388,7 @@ For Postman, set the proxy to `127.0.0.1:8080` in *Settings → Proxy*. On Windo
 The same as `gremlin proxy run -g -w`: the proxy with a WireGuard server, started as mitmweb so the QR code for the phone is in the *Capture* tab. Runs in the current console, stop it with `Ctrl+C`. Setup and Capacitor specifics: [Phones](#phones-android-ios).
 
 ```text
-gremlin mobile run [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
+gremlin mobile run [--profile NAME] [-p PORT] [-r RULES] [--wg-port PORT] [--dry-run]
 ```
 
 ### `gremlin install` (`install.bat`, `install.sh`)
@@ -469,7 +467,7 @@ Rule files in `rules/` are **personal** and ignored by git. The shared files are
 
 - Write the URL the way the browser actually sends it, including a non-default port (`https://host:8443/...`). The exact URL can be copied from the proxy log or from DevTools.
 - `?` in a pattern is a wildcard. To match a query string reliably, use the `query` field instead of putting `?a=b` in `url`.
-- Keep scenarios in separate files (`rules/trade-errors.json`, `rules/auth-errors.json`, …) and switch between them with `MITM_RULES` in a profile or `-r`.
+- Keep scenarios in separate files (`rules/trade-errors.json`, `rules/auth-errors.json`, …) and switch between them by short name with `MITM_RULES` in a profile or `-r`: `-r trade-errors`. Subfolders group them by feature: `-r trade/errors`.
 - To turn a rule off temporarily, set `"enabled": false` instead of deleting it.
 - To check what the server actually received after a `request` change, run with `-w` and open the request in mitmweb: it shows the changed request.
 
@@ -508,13 +506,15 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | --- | --- |
 | `NET::ERR_CERT_AUTHORITY_INVALID` | The certificate is not trusted: run `gremlin install` and restart the browser, or set `MITM_INSECURE=1` / use `-k` |
 | Requests do not appear in the proxy log | The page is open in your regular browser instead of the one started by `gremlin browser run`, or the proxy is on another port |
-| Nothing is mocked at all | `rules/rules.json` is empty (`[]`) after the first run: add rules, see [3. Create the rules file for the profile](#3-create-the-rules-file-for-the-profile). Also check the proxy log for which rules file is loaded |
+| Nothing is mocked at all | The profile's rules file (`rules/<profile>.json`) is empty (`[]`) after the first run, or you are editing another file (e.g. `staging.json.txt`): add rules, see [3. Create the rules file for the profile](#3-create-the-rules-file-for-the-profile). Also check the proxy log for which rules file is loaded |
 | Rule does not match | Compare the `url` pattern with the URL in the proxy log: scheme, port and trailing slash matter. Check `method` and `enabled` |
 | Mocked response visible in the proxy log, but the app gets `TypeError: Failed to fetch` | CORS: make sure `cors` is not `false` |
 | Rules file changes are ignored | The JSON is invalid; the proxy log shows `invalid JSON` with the line and column, and the previous rules stay active. See [Validation and log messages](#validation-and-log-messages) |
 | A rule is missing from `Loaded N rule(s)` | It is invalid and was skipped; the reason is logged just above the summary |
 | `mitmdump not found` | Run `gremlin install` |
-| `Profile not found: env\<name>.env` | The `-e` name must match a file in `env/` (without `.env`) |
+| `Profile not found: profiles\<name>.env` | The `--profile` name must match a file in `profiles/` (without `.env`) |
+| `Rules file not found: …` | `MITM_RULES` or `-r` names a file that does not exist: check the name against the `rules` folder. Only the profile's own `rules/<profile>.json` is created automatically |
+| `[warn] Profile env\<name>.env is in the old env folder` | Move the file to `profiles/`; until then it keeps working |
 | `[warn] …: unknown key "…" skipped` | A typo in a profile key. The message lists the allowed keys |
 | `[!!] Invalid port / Invalid value / Invalid URL / Browser … not found` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
 | `'gremlin' is not recognized …` / `The term 'gremlin' is not recognized …` / `gremlin: command not found` | The console is not in the project folder, or it is PowerShell / Git Bash / Linux, which need `.\gremlin` / `./gremlin.bat` / `./gremlin`. See [Consoles](#consoles) |
@@ -545,7 +545,7 @@ Problems found while the proxy is starting are printed as warnings rather than e
  Browser (dedicated profile)
         │  all traffic, including localhost
         ▼
- mitmproxy 127.0.0.1:8080 ── addons/mock_errors.py ── rules/rules.json
+ mitmproxy 127.0.0.1:8080 ── addons/mock_errors.py ── rules/<profile>.json
         │                │                         │
         │ no rule        │ "mock"                  │ "request" / "response"
         ▼                ▼                         ▼
@@ -576,7 +576,7 @@ When the app and its API are on different origins, the real server adds `Access-
 ```text
 gremlin/
 ├── README.md
-├── .gitignore           # keeps personal env profiles and rule sets out of git
+├── .gitignore           # keeps personal profiles and rule sets out of git
 ├── .gitattributes       # CRLF line endings in *.bat, LF in shell scripts
 ├── gremlin.bat          # entry point on Windows: gremlin browser run | proxy run | mobile run | install | test
 ├── gremlin              # entry point on Linux: ./gremlin browser run | …
@@ -590,8 +590,8 @@ gremlin/
 ├── rules/               # rule sets for mock_errors.py
 │   ├── README.md        # guide to every rule option with examples (shared)
 │   ├── examples.json    # reference of all rule features (shared)
-│   └── rules.json       # default rules (personal, created empty on first run)
-├── env/                 # settings profiles
+│   └── <profile>.json   # rules of each profile (personal, created empty on first run)
+├── profiles/            # settings profiles
 │   ├── example.env      # template with all keys (shared)
 │   └── <name>.env       # your profiles (personal)
 └── lib/                 # the commands, run through gremlin.bat / gremlin
@@ -602,7 +602,7 @@ gremlin/
     │   ├── proxy.py     # gremlin proxy run / mobile run: the proxy with all addons (current console)
     │   ├── install.py   # gremlin install: mitmproxy and trust in its certificate
     │   ├── testing.py   # gremlin test: pytest in .venv
-    │   ├── profile.py   # reads env/<name>.env
+    │   ├── profile.py   # reads profiles/<name>.env, picks the rules file
     │   ├── ports.py     # what listens on the port: nothing, a gremlin proxy (with which rules) or another program
     │   ├── terminal.py  # a new console / terminal window for the proxy
     │   └── common.py    # output, options, validation, finding mitmdump
@@ -611,14 +611,14 @@ gremlin/
     └── find-python.sh   # the same for gremlin and install.sh
 ```
 
-Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `env/*.env` other than `env/example.env`, and `.venv/`.
+Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `profiles/*.env` other than `profiles/example.env`, the old `env/` folder, and `.venv/`.
 
 ## Extending
 
-- **New test scenario**: add a rule to `rules/rules.json`, or create a new file in `rules/` and point `MITM_RULES` (or `-r`) to it.
+- **New test scenario**: add a rule to the profile's `rules/<profile>.json`, or create a new file in `rules/` and point `MITM_RULES` (or `-r`) to it by name.
 - **Sharing a scenario with the team**: add it to `rules/examples.json` (with a `name`, and pointing to `api.example.com` or another placeholder host) or paste it in the task/PR. Personal rule files are not committed.
-- **New target app**: create `env/<name>.env` from `env/example.env`.
-- **New setting**: add the key to `ENV_KEYS` in `lib/gremlin_cli/profile.py` and to `env/example.env`, read it in the command (`browser.py` / `proxy.py`) following the `option or profile or default` pattern used there, and validate it (see `validate_port()` / `validate_bool()` in `common.py`).
+- **New target app**: create `profiles/<name>.env` from `profiles/example.env`.
+- **New setting**: add the key to `ENV_KEYS` in `lib/gremlin_cli/profile.py` and to `profiles/example.env`, read it in the command (`browser.py` / `proxy.py`) following the `option or profile or default` pattern used there, and validate it (see `validate_port()` / `validate_bool()` in `common.py`).
 - **New command**: add a module to `lib/gremlin_cli/` with a `run(args) -> int` and route it in `cli.py`; `gremlin.bat` and `gremlin` pass every command on as is.
 - **New rule field**: add it to `REQUIRED_FIELDS` or `OPTIONAL_FIELDS` and validate it in `parse_rule()` in `addons/mock_errors.py`, then document it in [`rules/README.md`](rules/README.md) and [Rules](#rules).
 - **New change in `request` / `response`**: add it to `REQUEST_OPS` / `RESPONSE_OPS`, a field to `Ops`, validate it in `_parse_ops()` and apply it in `apply_ops()` in `addons/mock_errors.py`. Add an example to `rules/examples.json` (a test checks that every change has one) and document it in [`rules/README.md`](rules/README.md); `json` blocks there are validated by the tests too.
