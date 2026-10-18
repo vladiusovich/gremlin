@@ -2,7 +2,7 @@
 Gremlin's mitmproxy addon: replaces responses with errors by method + URL, rules live in a JSON file.
 
 Run:
-  start_proxy.bat
+  gremlin proxy run
   (or manually: mitmdump -s addons/mock_errors.py --set rules_file=rules/rules.json)
 
 The rules file is reloaded automatically when it changes (no need to restart mitmproxy).

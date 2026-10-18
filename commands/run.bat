@@ -3,24 +3,25 @@ setlocal EnableExtensions
 rem Opens a browser with a dedicated profile whose traffic all goes through mitmproxy.
 rem If no proxy is listening on the port yet, runs "gremlin proxy run" in a separate window.
 rem
-rem   gremlin browser run [URL] [options]
+rem   gremlin run [URL] [options]           proxy (if not running yet) + browser
+rem   gremlin browser run [URL] [options]   browser only (gremlin passes --no-proxy-start)
 rem
 rem   URL                    start page (default http://localhost:3001/)
 rem   -e, --env NAME         settings profile env\NAME.env (default env\default.env, if present)
 rem   -b, --browser NAME     chrome | edge | path to a Chromium-based browser exe (default chrome)
 rem   -p, --port PORT        proxy port (default 8080)
-rem   -r, --rules FILE       rules file for mock_errors.py (default rules\rules.json)
-rem   -w, --web              start the proxy as mitmweb (traffic UI at http://127.0.0.1:8081)
+rem   -r, --rules FILE       rules file for mock_errors.py (default rules\rules.json), not with browser run
+rem   -w, --web              start the proxy as mitmweb (traffic UI at http://127.0.0.1:8081), not with browser run
 rem   -k, --insecure         ignore certificate errors (if install.bat was not run)
-rem   --no-proxy-start       do not start the proxy, browser only
 rem   --dry-run              print the commands without running anything
 rem
 rem Priority: command line > profile > built-in default.
 rem
 rem Examples:
-rem   gremlin browser run
+rem   gremlin run
+rem   gremlin run -e staging
+rem   gremlin run https://app.example.com/ -b edge -p 8081
 rem   gremlin browser run -e staging
-rem   gremlin browser run https://app.example.com/ -b edge -p 8081
 
 for %%r in ("%~dp0..") do set "ROOT=%%~fr\"
 set "ENV_NAME="
@@ -31,6 +32,7 @@ set "OPT_RULES="
 set "OPT_WEB="
 set "OPT_INSECURE="
 set "START_PROXY=1"
+set "PROXY_ONLY_OPT="
 set "DRY="
 
 :parse
@@ -60,6 +62,14 @@ set "OPT_URL=%~1"
 shift
 goto :parse
 :parsed
+
+rem -r and -w only matter when the proxy is started here; refuse them rather than silently ignore
+if not defined START_PROXY if defined OPT_RULES set "PROXY_ONLY_OPT=-r"
+if not defined START_PROXY if defined OPT_WEB set "PROXY_ONLY_OPT=-w"
+if defined PROXY_ONLY_OPT (
+  echo [!!] %PROXY_ONLY_OPT% is a proxy option: use "gremlin run" or "gremlin proxy run"
+  goto :help
+)
 
 call "%ROOT%lib\load-env.bat" "%ENV_NAME%" || exit /b 1
 if defined ENV_FILE echo [ok] Profile: %ENV_FILE%
@@ -105,7 +115,10 @@ if /i not "%BROWSER%"=="chrome" if /i not "%BROWSER%"=="edge" if not exist "%EXE
 rem Separate profile per browser+port pair: otherwise the flags are ignored if the browser is already open
 for %%n in ("%BROWSER%") do set "PROFILE_DIR=%TEMP%\mitm-profile-%%~nn-%PORT%"
 
-if not defined START_PROXY goto :browser
+if not defined START_PROXY (
+  call :is_listening || echo [warn] No proxy on port %PORT%: pages will not load until it runs ^(gremlin proxy run -p %PORT%^)
+  goto :browser
+)
 call :is_listening
 if not errorlevel 1 (
   echo [ok] Proxy is already listening on port %PORT%.
@@ -156,5 +169,9 @@ for %%v in (1 true yes on) do if /i "%~1"=="%%v" exit /b 0
 exit /b 1
 
 :help
-echo Usage: gremlin browser run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-r rules.json] [-w] [-k] [--no-proxy-start] [--dry-run]
+if defined START_PROXY (
+  echo Usage: gremlin run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-r rules.json] [-w] [-k] [--dry-run]
+) else (
+  echo Usage: gremlin browser run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-k] [--dry-run]
+)
 exit /b 1
