@@ -138,7 +138,7 @@ async def test_default_body(gremlin):
     }
 
 
-@pytest.mark.parametrize("body", [{"code": "NOT_FOUND"}, [1, "two"], {"unicode": "ошибка"}])
+@pytest.mark.parametrize("body", [{"code": "NOT_FOUND"}, [1, "two"], {"unicode": "Fehler: Größe – ✓"}])
 async def test_json_body(gremlin, body):
     gremlin.load([{"url": URL, "error": 404, "body": body}])
     r = (await run(gremlin, make_flow())).response
