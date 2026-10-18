@@ -437,55 +437,23 @@ def test_incompatible_is_reported_even_if_the_sections_are_invalid():
     assert any("'response.status'" in e for e in errors)
 
 
-def test_old_error_with_response_is_an_error():
-    msg = incompatible(bad({"url": URL, "error": 500, "response": {"status": 401}}))
-    assert msg.startswith("incompatible: 'error' cannot be used together with 'response' in one rule. "
-                          "'error' answers instead of the server")
+# --- mock fields at the top level of a rule ----------------------------------------
+
+def test_error_at_the_top_level_is_not_a_mock():
+    errors = bad({"url": URL, "error": 500})
+    assert any(e.startswith("nothing to do:") for e in errors), errors
 
 
-# --- the old format: "error" and mock fields at the top level --------------------
-
-def test_old_format_still_works_with_a_hint():
-    rule, warnings = ok({"url": URL, "error": 429, "body": {"m": "x"}, "headers": {"Retry-After": 5},
-                         "content_type": "text/plain", "delay": 1, "cors": False})
-    m = rule.mock
-    assert (m.status, m.body, m.headers, m.content_type, m.delay, m.cors) == \
-        (429, {"m": "x"}, {"Retry-After": "5"}, "text/plain", 1.0, False)
+def test_mock_fields_next_to_mock_are_ignored_with_a_warning():
+    rule, warnings = ok({"url": URL, "mock": MOCK, "body": "x"})
+    assert rule.mock.body is None
     assert warnings == [
-        "old format: 'error', 'body', 'content_type', 'headers', 'delay', 'cors' at the top level still works, "
-        "but write it as \"mock\": {\"status\": 429, \"body\": {\"m\": \"x\"}, \"content_type\": \"text/plain\", "
-        "\"headers\": {\"Retry-After\": 5}, \"delay\": 1, \"cors\": false}"
+        "'body' at the top level is ignored: put it inside 'mock' (a fake response) "
+        "or 'response' (changes to the real response)"
     ]
 
 
-def test_old_format_timeout_default_delay():
-    rule, _ = ok({"url": URL, "error": "timeout"})
-    assert (rule.mock.status, rule.mock.delay) == ("timeout", 30.0)
-
-
-@pytest.mark.parametrize("raw, expected", [
-    ({"error": 600}, "field 'error' (required): HTTP status must be 100-599, got 600"),
-    ({"error": "500"}, "field 'error' (required): write the status as a number without quotes: 500"),
-    ({"error": 500, "delay": -1}, "field 'delay' (optional): expected a number of seconds >= 0"),
-    ({"error": 500, "cors": "no"}, "field 'cors' (optional): expected true or false"),
-])
-def test_old_format_errors_name_the_fields_as_written(raw, expected):
-    errors = bad({"url": URL, **raw})
-    assert any(expected in e for e in errors), errors
-
-
-def test_old_format_kill_warning_names_the_fields_as_written():
-    _, warnings = ok({"url": URL, "error": "kill", "body": "x", "delay": 1})
-    assert 'with "error": "kill" no response is sent, so body, delay has no effect' in warnings
-
-
-def test_old_fields_next_to_mock_are_an_error():
-    errors = bad({"url": URL, "mock": MOCK, "body": "x", "error": 500})
-    assert "'error', 'body' at the top level is the old format of 'mock' and cannot be used together " \
-           "with 'mock': move it inside 'mock'" in errors
-
-
-def test_old_mock_fields_without_error_are_ignored_with_a_warning():
+def test_mock_fields_at_the_top_level_are_ignored_with_a_warning():
     _, warnings = ok({"url": URL, "response": {"status": 500}, "body": {"a": 1}, "delay": 1})
     assert warnings == [
         "'body', 'delay' at the top level is ignored: put it inside 'mock' (a fake response) "

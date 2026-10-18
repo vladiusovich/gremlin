@@ -38,7 +38,7 @@ def test_utf8_bom_is_accepted(gremlin):
 def test_disabled_rules_are_skipped_but_keep_numbering(gremlin, caplog):
     caplog.set_level(logging.INFO)
     # a disabled rule is not validated, even if broken
-    rules = gremlin.load([{"enabled": False, "error": "nonsense"}, R2])
+    rules = gremlin.load([{"enabled": False, "mock": "nonsense"}, R2])
     assert [(r.number, r.name) for r in rules] == [(2, "two")]
     assert any("1 rule(s)" in m and "1 disabled" in m for m in messages(caplog))
 
@@ -60,7 +60,7 @@ def test_invalid_rule_is_skipped_others_loaded(gremlin, caplog):
 
 def test_invalid_json_keeps_previous_rules(gremlin, caplog):
     gremlin.load([R1, R2])
-    gremlin.write('[{"url": "x" "error": 1}]', raw=True)
+    gremlin.write('[{"url": "x" "mock": 1}]', raw=True)
     gremlin.addon._reload()
     assert [r.name for r in gremlin.addon.rules] == ["one", "two"]
     assert any("rules.json:1:" in m and "invalid JSON" in m and "Keeping the previous 2 rule(s)" in m
@@ -151,7 +151,8 @@ def test_errors_are_errors_after_startup(gremlin, caplog):
 def test_changing_rules_file_option_switches_file(gremlin, tmp_path):
     gremlin.load([R1])
     other = tmp_path / "other.json"
-    other.write_text('[{"url": "https://b.test", "error": 418}, {"url": "https://c.test", "error": 418}]')
+    other.write_text('[{"url": "https://b.test", "mock": {"status": 418}}, '
+                     '{"url": "https://c.test", "mock": {"status": 418}}]')
     gremlin.tctx.configure(gremlin.addon, rules_file=str(other))
     assert len(gremlin.addon.rules) == 2
     assert gremlin.addon.path == str(other)
@@ -182,14 +183,6 @@ def test_incompatible_rule_is_skipped_with_the_reason(gremlin, caplog):
                for m in log)
     assert 'rules.json: rule #1 "mixed": rule skipped' in log
     assert any("1 invalid skipped" in m for m in log)
-
-
-def test_old_format_rule_is_loaded_with_a_hint(gremlin, caplog):
-    rules = gremlin.load([{"name": "old", "url": "https://a.test/1", "error": 503, "body": "down"}])
-    assert rules[0].mock.status == 503
-    assert rules[0].mock.body == "down"
-    assert 'rules.json: rule #1 "old": old format: \'error\', \'body\' at the top level still works, ' \
-           'but write it as "mock": {"status": 503, "body": "down"}' in messages(caplog, logging.WARNING)
 
 
 # --- rules shipped with the project -------------------------------------------

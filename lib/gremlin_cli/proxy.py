@@ -7,14 +7,14 @@ import sys
 from pathlib import Path
 
 from . import profile
-from .common import (DEFAULT_RULES, PROG, ROOT, WINDOWS, detail, exe_name, fail, find_mitmdump, info, is_on,
+from .common import (PROG, ROOT, WINDOWS, detail, exe_name, fail, find_mitmdump, info, is_on,
                      ok, parse_options, rel, show, validate_bool, validate_port)
 
-USAGE = f"Usage: {PROG} proxy run [-e profile] [-p PORT] [-r rules.json] [-w] [-g] [--wg-port PORT] [--dry-run]"
-MOBILE_USAGE = f"Usage: {PROG} mobile run [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]"
+USAGE = f"Usage: {PROG} proxy run [--profile NAME] [-p PORT] [-r RULES] [-w] [-g] [--wg-port PORT] [--dry-run]"
+MOBILE_USAGE = f"Usage: {PROG} mobile run [--profile NAME] [-p PORT] [-r RULES] [--wg-port PORT] [--dry-run]"
 
 OPTIONS = {
-    "-e": ("env", True), "--env": ("env", True),
+    "--profile": ("profile", True),
     "-p": ("port", True), "--port": ("port", True),
     "-r": ("rules", True), "--rules": ("rules", True),
     "-w": ("web", False), "--web": ("web", False),
@@ -33,14 +33,12 @@ def run(args: list[str], mobile: bool = False) -> int:
     across restarts. The regular proxy keeps listening on the port next to it.
     """
     opts = parse_options(args, OPTIONS, MOBILE_USAGE if mobile else USAGE)
-    if "rules" in opts:
-        opts["rules"] = os.path.abspath(opts["rules"])
-    settings, env_file = profile.load(opts.get("env"))
-    if env_file:
-        ok(f"Profile: {env_file}")
+    settings, profile_file = profile.load(opts.get("profile"))
+    if profile_file:
+        ok(f"Profile: {profile_file}")
 
     port = opts.get("port") or settings.get("MITM_PORT") or "8080"
-    rules = opts.get("rules") or settings.get("MITM_RULES") or str(DEFAULT_RULES)
+    rules = profile.rules_for(opts.get("rules"), settings, profile_file)
     web = mobile or bool(opts.get("web")) or is_on(settings.get("MITM_WEB"))
     wireguard = mobile or bool(opts.get("wireguard")) or is_on(settings.get("MITM_WIREGUARD"))
     wg_port = opts.get("wg_port") or settings.get("MITM_WG_PORT") or "51820"
@@ -63,14 +61,16 @@ def run(args: list[str], mobile: bool = False) -> int:
             fail(f"mitmweb not found next to {mitmdump}. Reinstall mitmproxy: {PROG} install")
 
     if not Path(rules).exists():
-        if os.path.normcase(rules) != os.path.normcase(str(DEFAULT_RULES)):
+        own = profile.own_rules_file(profile_file)
+        if os.path.normcase(rules) != os.path.normcase(str(own)):
             fail(f"Rules file not found: {rules}")
-        # The default rules file is personal and not in git: start with an empty rule set
+        # The profile's own rules file is personal and not in git: start with an empty rule set
+        shown = rel("rules", own.name)
         if dry:
-            info(f"An empty {rel('rules', 'rules.json')} would be created")
+            info(f"An empty {shown} would be created")
         else:
-            DEFAULT_RULES.write_text("[]\n", encoding="utf-8")
-            ok(f"Created an empty {rel('rules', 'rules.json')}, example rules: {rel('rules', 'examples.json')}")
+            own.write_text("[]\n", encoding="utf-8")
+            ok(f"Created an empty {shown}, example rules: {rel('rules', 'examples.json')}")
 
     addons = sorted(p for p in (ROOT / "addons").glob("*.py") if not p.name.startswith("_"))
     command = [tool, "-p", port]

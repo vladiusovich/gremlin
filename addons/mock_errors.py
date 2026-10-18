@@ -5,7 +5,7 @@ server ("mock"), or changes the real request and/or the real server response ("r
 
 Run:
   gremlin proxy run
-  (or manually: mitmdump -s addons/mock_errors.py --set rules_file=rules/rules.json)
+  (or manually: mitmdump -s addons/mock_errors.py --set rules_file=rules/default.json)
 
 The rules file is reloaded automatically when it changes (no need to restart mitmproxy).
 Format: see rules/README.md and the schema below, examples: rules/examples.json.
@@ -14,7 +14,7 @@ Validation on load:
   - invalid JSON or a non-array root: the whole file is rejected, previous rules stay active;
   - an invalid rule (including "mock" together with "request" / "response"): only that rule
     is skipped, the others are loaded;
-  - unknown fields, fields that have no effect, the old top-level "error" format: warning,
+  - unknown fields, fields that have no effect: warning,
     the rule is still loaded.
 """
 import asyncio
@@ -61,9 +61,8 @@ MOCK_OPS = {
 }
 # Fields that only make sense when a response is sent (not for "timeout" / "kill")
 MOCK_RESPONSE_OPS = ("body", "content_type", "headers", "cors")
-# The format before "mock": these fields at the top level of a rule -> the "mock" field they became
-LEGACY_MOCK_FIELDS = {"error": "status", "body": "body", "content_type": "content_type",
-                      "headers": "headers", "delay": "delay", "cors": "cors"}
+# Fields of "mock" / "response" that are easy to write at the top level of a rule by mistake
+MISPLACED_FIELDS = ("body", "content_type", "headers", "delay", "cors")
 
 # Changes allowed in the "request" and "response" sections, applied in this order.
 REQUEST_OPS = {
@@ -246,22 +245,17 @@ def _parse_replace(key: str, value: Any, errors: list[str], warnings: list[str])
     return result
 
 
-def _parse_mock(raw: Any, errors: list[str], warnings: list[str], legacy: bool = False) -> Mock | None:
-    """Validates the "mock" section, or (legacy=True) the old top-level fields converted to it.
-    Returns None if it has errors."""
+def _parse_mock(raw: Any, errors: list[str], warnings: list[str]) -> Mock | None:
+    """Validates the "mock" section. Returns None if it has errors."""
     def name(op: str) -> str:
-        # messages name the fields the way they are written in the file
-        if legacy:
-            return "error" if op == "status" else op
         return f"mock.{op}"
 
     if not isinstance(raw, dict):
         errors.append(_bad("mock", 'an object like {"status": 500, "body": {"code": "DOWN"}}', raw))
         return None
-    if not legacy:
-        for op in raw:
-            if op not in MOCK_OPS:
-                _unknown_op("mock", op, warnings)
+    for op in raw:
+        if op not in MOCK_OPS:
+            _unknown_op("mock", op, warnings)
     n_errors = len(errors)
 
     status = raw.get("status")
@@ -392,32 +386,31 @@ def parse_rule(number: int, raw: Any) -> tuple[Rule | None, list[str], list[str]
     if not isinstance(raw, dict):
         return None, [f"must be a JSON object, got {_json_type(raw)}"], []
 
-    legacy = [k for k in LEGACY_MOCK_FIELDS if k in raw]
+    misplaced = [k for k in MISPLACED_FIELDS if k in raw]
     for key in raw:
-        if key not in ALL_FIELDS and key not in LEGACY_MOCK_FIELDS:
+        if key not in ALL_FIELDS and key not in MISPLACED_FIELDS:
             hint = difflib.get_close_matches(key, ALL_FIELDS, n=1)
             warnings.append(f"unknown field '{key}' is ignored" + (f", did you mean '{hint[0]}'?" if hint else ""))
     for key, description in REQUIRED_FIELDS.items():
         if key not in raw:
             errors.append(f"field '{key}' (required) is missing: {description}")
 
-    # What the rule does: answer instead of the server ("mock", or the old top-level "error"),
-    # or change the real traffic ("request" / "response"). The two cannot be mixed.
-    mock_key = "mock" if "mock" in raw else "error" if "error" in raw else None
+    # What the rule does: answer instead of the server ("mock"), or change the real traffic
+    # ("request" / "response"). The two cannot be mixed.
     real = [s for s in ("request", "response") if s in raw]
-    if mock_key is None and not real:
+    if "mock" not in raw and not real:
         errors.append(
             "nothing to do: add 'mock' to answer instead of the server, "
             "or 'request' / 'response' to change the real request / response"
         )
-    if mock_key and real:
+    if "mock" in raw and real:
         changes = " and ".join(
             {"request": "'request' changes the request that goes to the server",
              "response": "'response' changes the answer that comes back from the server"}[s] for s in real)
         errors.append(
-            f"incompatible: '{mock_key}' cannot be used together with {_quote_list(real)} in one rule. "
-            f"'{mock_key}' answers instead of the server, so the request is never sent, while {changes}. "
-            f"Keep either '{mock_key}' or {' / '.join(repr(s) for s in real)}"
+            f"incompatible: 'mock' cannot be used together with {_quote_list(real)} in one rule. "
+            f"'mock' answers instead of the server, so the request is never sent, while {changes}. "
+            f"Keep either 'mock' or {' / '.join(repr(s) for s in real)}"
         )
 
     name = raw.get("name")
@@ -461,24 +454,10 @@ def parse_rule(number: int, raw: Any) -> tuple[Rule | None, list[str], list[str]
                     "without the query string; move the parameters to 'query'"
                 )
 
-    mock = None
-    if "mock" in raw:
-        mock = _parse_mock(raw["mock"], errors, warnings)
-        if legacy:
-            errors.append(
-                f"{_quote_list(legacy)} at the top level is the old format of 'mock' and cannot be used "
-                f"together with 'mock': move it inside 'mock'"
-            )
-    elif "error" in raw:
-        converted = {LEGACY_MOCK_FIELDS[k]: raw[k] for k in legacy}
-        mock = _parse_mock(converted, errors, warnings, legacy=True)
+    mock = _parse_mock(raw["mock"], errors, warnings) if "mock" in raw else None
+    if misplaced:
         warnings.append(
-            f"old format: {_quote_list(legacy)} at the top level still works, but write it as "
-            f"\"mock\": {json.dumps(converted, ensure_ascii=False)}"
-        )
-    elif legacy:
-        warnings.append(
-            f"{_quote_list(legacy)} at the top level is ignored: put it inside 'mock' (a fake response) "
+            f"{_quote_list(misplaced)} at the top level is ignored: put it inside 'mock' (a fake response) "
             "or 'response' (changes to the real response)"
         )
 
