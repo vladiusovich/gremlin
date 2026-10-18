@@ -324,7 +324,6 @@ Booleans accept `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`.
 - Format: `KEY=VALUE`, `#` starts a comment line (trailing comments are not supported). An empty value (`MITM_PORT=`) counts as not set.
 - Validation: an unknown key (a typo like `MITM_PROT`) is skipped with a `[warn]` listing the allowed keys, so a profile cannot override system variables such as `PATH` either. An invalid value (`MITM_PORT=abc`, `MITM_WEB=maybe`, a URL without scheme, a browser that does not exist) stops the script with an `[!!]` error that names the setting.
 - `profiles/example.env` is the shared template with all keys; your own profiles are ignored by git.
-- Before `profiles/`, profiles were kept in `env/` and the default rules in `rules/rules.json`. Both are still read, with a `[warn]` saying where to move the file; a profile in `profiles/` wins over one with the same name in `env/`.
 
 ## Command-line options
 
@@ -341,7 +340,7 @@ gremlin browser run [URL] [options]
 | Option | Profile key | Default | Description |
 | --- | --- | --- | --- |
 | `URL` | `MITM_URL` | `http://localhost:3001/` | Start page |
-| `--profile` (`-e`, `--env`) | | `profiles/default.env`, if present | Profile `profiles/<name>.env`. `-e` and `--env` are its old names and still work |
+| `--profile` | | `profiles/default.env`, if present | Profile `profiles/<name>.env` |
 | `-b`, `--browser` | `MITM_BROWSER` | `chrome` | `chrome`, `edge`, `chromium` (Linux) or a full path to a Chromium-based browser executable |
 | `-p`, `--port` | `MITM_PORT` | `8080` | Proxy port |
 | `-r`, `--rules` | `MITM_RULES` | `rules\<profile>.json` | Rules file: a short name (`trade-errors` = `rules\trade-errors.json`) or a path ending in `.json` (relative to the current folder) |
@@ -514,7 +513,6 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | `mitmdump not found` | Run `gremlin install` |
 | `Profile not found: profiles\<name>.env` | The `--profile` name must match a file in `profiles/` (without `.env`) |
 | `Rules file not found: …` | `MITM_RULES` or `-r` names a file that does not exist: check the name against the `rules` folder. Only the profile's own `rules/<profile>.json` is created automatically |
-| `[warn] Profile env\<name>.env is in the old env folder` | Move the file to `profiles/`; until then it keeps working |
 | `[warn] …: unknown key "…" skipped` | A typo in a profile key. The message lists the allowed keys |
 | `[!!] Invalid port / Invalid value / Invalid URL / Browser … not found` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
 | `'gremlin' is not recognized …` / `The term 'gremlin' is not recognized …` / `gremlin: command not found` | The console is not in the project folder, or it is PowerShell / Git Bash / Linux, which need `.\gremlin` / `./gremlin.bat` / `./gremlin`. See [Consoles](#consoles) |
@@ -611,7 +609,7 @@ gremlin/
     └── find-python.sh   # the same for gremlin and install.sh
 ```
 
-Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `profiles/*.env` other than `profiles/example.env`, the old `env/` folder, and `.venv/`.
+Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `profiles/*.env` other than `profiles/example.env`, and `.venv/`.
 
 ## Extending
 

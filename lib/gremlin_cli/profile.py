@@ -11,20 +11,13 @@ ENV_KEYS = ("MITM_URL", "MITM_BROWSER", "MITM_PORT", "MITM_RULES", "MITM_WEB", "
             "MITM_WIREGUARD", "MITM_WG_PORT")
 PROFILES_DIR = ROOT / "profiles"
 RULES_DIR = ROOT / "rules"
-# Where profiles and the default rules were kept before: still read, with a warning to move them
-LEGACY_PROFILES_DIR = ROOT / "env"
-LEGACY_DEFAULT_RULES = RULES_DIR / "rules.json"
 
 
 def find(name: str) -> Path | None:
-    """profiles/<name>.env (the name may include .env), else the same file in the old env/ folder."""
-    for folder in (PROFILES_DIR, LEGACY_PROFILES_DIR):
-        for path in (folder / f"{name}.env", folder / name):
-            if path.is_file():
-                if folder == LEGACY_PROFILES_DIR:
-                    warn(f"Profile {rel('env', path.name)} is in the old env folder: "
-                         f"move it to {rel('profiles', path.name)}")
-                return path
+    """profiles/<name>.env; the name may include .env."""
+    for path in (PROFILES_DIR / f"{name}.env", PROFILES_DIR / name):
+        if path.is_file():
+            return path
     return None
 
 
@@ -71,22 +64,13 @@ def rules_path(value: str, base: Path) -> str:
 
 
 def own_rules_file(path: Path | None) -> Path:
-    """rules/<profile>.json, rules/default.json without a profile: created empty if missing."""
+    """The rules file a profile uses without MITM_RULES: rules/<profile>.json (rules/default.json without
+    a profile). Created empty if missing."""
     return RULES_DIR / f"{path.stem if path else 'default'}.json"
-
-
-def own_rules(path: Path | None) -> str:
-    """The rules file a profile uses without MITM_RULES: own_rules_file(). Until rules/default.json
-    exists, the default profile uses the old rules/rules.json if it is there."""
-    rules = own_rules_file(path)
-    if rules.name == "default.json" and not rules.exists() and LEGACY_DEFAULT_RULES.exists():
-        warn(f"Using the old {rel('rules', 'rules.json')}: rename it to {rel('rules', 'default.json')}")
-        return str(LEGACY_DEFAULT_RULES)
-    return str(rules)
 
 
 def rules_for(cli_value: str | None, settings: dict[str, str], path: Path | None) -> str:
     """The rules file to use. Priority: -r > MITM_RULES in the profile > the profile's own rules file."""
     if cli_value:
         return rules_path(cli_value, Path.cwd())
-    return settings.get("MITM_RULES") or own_rules(path)
+    return settings.get("MITM_RULES") or str(own_rules_file(path))

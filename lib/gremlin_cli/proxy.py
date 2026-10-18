@@ -14,8 +14,7 @@ USAGE = f"Usage: {PROG} proxy run [--profile NAME] [-p PORT] [-r RULES] [-w] [-g
 MOBILE_USAGE = f"Usage: {PROG} mobile run [--profile NAME] [-p PORT] [-r RULES] [--wg-port PORT] [--dry-run]"
 
 OPTIONS = {
-    # -e / --env: the old name of --profile, still accepted
-    "--profile": ("profile", True), "-e": ("profile", True), "--env": ("profile", True),
+    "--profile": ("profile", True),
     "-p": ("port", True), "--port": ("port", True),
     "-r": ("rules", True), "--rules": ("rules", True),
     "-w": ("web", False), "--web": ("web", False),

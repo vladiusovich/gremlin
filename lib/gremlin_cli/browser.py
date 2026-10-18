@@ -25,8 +25,7 @@ USAGE = (f"Usage: {PROG} browser run [URL] [--profile NAME] [-b {BROWSERS.replac
          "[-r RULES] [-w] [-k] [--dry-run]")
 
 OPTIONS = {
-    # -e / --env: the old name of --profile, still accepted
-    "--profile": ("profile", True), "-e": ("profile", True), "--env": ("profile", True),
+    "--profile": ("profile", True),
     "-b": ("browser", True), "--browser": ("browser", True),
     "-p": ("port", True), "--port": ("port", True),
     "-r": ("rules", True), "--rules": ("rules", True),
