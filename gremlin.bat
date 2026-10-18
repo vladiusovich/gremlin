@@ -1,54 +1,36 @@
 @echo off
 setlocal EnableExtensions
-rem Single entry point: routes "gremlin <command> [options]" to the scripts in commands\.
+rem Single entry point on Windows: runs "gremlin <command> [options]" with Python (lib\main.py).
 rem
-rem   gremlin browser run [options]    proxy (if not running yet) + browser (commands\browser-run.bat)
-rem   gremlin proxy run [options]      proxy only, in the current console (commands\proxy-run.bat)
-rem   gremlin mobile run [options]     proxy + WireGuard for phones, in mitmweb (commands\proxy-run.bat -g -w)
-rem   gremlin install                 install mitmproxy and trust its certificate (install.bat)
-rem   gremlin test [pytest options]    run the tests (run_tests.bat)
+rem   gremlin browser run [options]    proxy (if not running yet) + browser
+rem   gremlin proxy run [options]      proxy only, in the current console
+rem   gremlin mobile run [options]     proxy + WireGuard for phones, in mitmweb
+rem   gremlin install [-y]             Python, mitmproxy and its certificate (install.bat)
+rem   gremlin test [pytest options]    run the tests
 rem
 rem The options after the command are passed on unchanged.
 
 set "ROOT=%~dp0"
-set "TARGET="
-set "ARGS="
-set "GROUP=%~1"
-set "CMD=%~2"
+rem install works without Python: install.bat sets it up first
+if /i "%~1"=="install" goto :install
 
-if /i "%GROUP%"=="proxy"   if /i "%CMD%"=="run" set "TARGET=commands\proxy-run.bat"
-if /i "%GROUP%"=="browser" if /i "%CMD%"=="run" set "TARGET=commands\browser-run.bat"
-if /i "%GROUP%"=="mobile"  if /i "%CMD%"=="run" (set "TARGET=commands\proxy-run.bat" & set "ARGS= --wireguard --web")
-if defined TARGET (shift & shift & goto :collect)
-if /i "%GROUP%"=="install" (set "TARGET=install.bat" & shift & goto :collect)
-if /i "%GROUP%"=="test"    (set "TARGET=run_tests.bat" & shift & goto :collect)
-if "%GROUP%"=="" goto :help
-if /i "%GROUP%"=="help"   goto :help
-if /i "%GROUP%"=="-h"     goto :help
-if /i "%GROUP%"=="--help" goto :help
-echo [!!] Unknown command: gremlin %*
-goto :help
+call "%ROOT%lib\find-python.bat"
+if not defined PYTHON (
+  echo [!!] Python 3.10+ not found. Run: install.bat
+  exit /b 1
+)
+rem No `call`: it would expand % in arguments a second time (e.g. %20 in a URL)
+"%PYTHON%" "%ROOT%lib\main.py" %*
+exit /b %errorlevel%
 
-:collect
+:install
 rem %* ignores shift, so rebuild the rest of the arguments one by one (quotes kept as typed)
-if [%1]==[] goto :run
+shift
+set "ARGS="
+:collect
+if [%1]==[] goto :run_install
 set ARGS=%ARGS% %1
 shift
 goto :collect
-
-:run
-rem No `call`: control passes to the target, which avoids a second expansion of % in arguments
-rem (e.g. %20 in a URL), and its exit code becomes gremlin's exit code
-"%ROOT%%TARGET%"%ARGS%
-
-:help
-echo Usage:
-echo   gremlin browser run [URL] [-e profile] [-b chrome^|edge^|path] [-p PORT] [-r rules.json] [-w] [-k] [--dry-run]
-echo                       proxy (if not running yet) + browser
-echo   gremlin proxy run   [-e profile] [-p PORT] [-r rules.json] [-w] [-g] [--wg-port PORT] [--dry-run]
-echo                       proxy only, in this console; -g adds WireGuard for phones
-echo   gremlin mobile run  [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
-echo                       proxy + WireGuard for phones, QR code in mitmweb
-echo   gremlin install
-echo   gremlin test        [pytest options]
-exit /b 1
+:run_install
+"%ROOT%install.bat"%ARGS%

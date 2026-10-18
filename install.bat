@@ -1,67 +1,61 @@
 @echo off
 setlocal EnableExtensions
-rem Installs mitmproxy (if missing) and adds its root CA to the current user's Trusted Root
-rem Certification Authorities, so the browser accepts HTTPS through the proxy.
+rem Sets gremlin up on Windows: Python 3.10+ (asks before installing it with winget), then
+rem "gremlin install" in Python: mitmproxy (asks too) and trust in its certificate.
 rem Safe to re-run: steps already done are skipped.
+rem
+rem   install.bat [-y]       -y answers yes to every question
 
-call "%~dp0lib\find-mitmdump.bat"
-if defined MITMDUMP (
-  echo [ok] mitmproxy is already installed: %MITMDUMP%
-  goto :cert
+set "ROOT=%~dp0"
+set "YES="
+for %%a in (%*) do (
+  if /i "%%~a"=="-y" set "YES=1"
+  if /i "%%~a"=="--yes" set "YES=1"
 )
 
-echo [..] mitmproxy not found, installing via winget...
-where winget >nul 2>nul
-if not errorlevel 1 (
-  winget install --id mitmproxy.mitmproxy -e --accept-package-agreements --accept-source-agreements
-  call "%~dp0lib\find-mitmdump.bat"
+call "%ROOT%lib\find-python.bat"
+if defined PYTHON (
+  echo [ok] Python: %PYTHON%
+  goto :run
 )
 
-if not defined MITMDUMP (
-  where python >nul 2>nul
-  if not errorlevel 1 (
-    echo [..] winget failed, trying pip...
-    python -m pip install --user --upgrade mitmproxy
-    call "%~dp0lib\find-mitmdump.bat"
+echo [..] Python 3.10 or newer is not installed. gremlin's commands are written in Python.
+where winget >nul 2>nul || (
+  echo [!!] winget is not available to install it. Install Python from https://www.python.org/downloads/
+  echo      ^(tick "Add python.exe to PATH"^) and run install.bat again.
+  goto :fail
+)
+if defined YES (
+  echo [??] Install Python 3.12 now with winget? [Y/N] Y ^(-y^)
+) else (
+  choice /c YN /m "[??] Install Python 3.12 now with winget?"
+  if errorlevel 2 (
+    echo [!!] Python is required. Install it from https://www.python.org/downloads/ and run install.bat again.
+    goto :fail
   )
 )
-
-if not defined MITMDUMP (
-  echo [!!] Failed to install mitmproxy. Install it manually: https://mitmproxy.org/downloads/
-  exit /b 1
+winget install --id Python.Python.3.12 -e --scope user --accept-package-agreements --accept-source-agreements
+call "%ROOT%lib\find-python.bat"
+if not defined PYTHON (
+  echo [!!] Failed to install Python. Install it from https://www.python.org/downloads/ and run install.bat again.
+  goto :fail
 )
-echo [ok] mitmproxy installed: %MITMDUMP%
+echo [ok] Python installed: %PYTHON%
 
-:cert
-set "CA_CER=%USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.cer"
+:run
+"%PYTHON%" "%ROOT%lib\main.py" install %*
+set "CODE=%errorlevel%"
+goto :end
 
-if not exist "%CA_CER%" (
-  echo [..] Generating the mitmproxy certificate...
-  rem The CA is created on the proxy's first start: run it briefly on a free port, then kill it
-  powershell -NoProfile -Command "$p = Start-Process -FilePath $env:MITMDUMP -ArgumentList '-p','0' -WindowStyle Hidden -PassThru; for($i=0; $i -lt 60 -and -not (Test-Path $env:CA_CER); $i++){ Start-Sleep -Milliseconds 500 }; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue"
-)
-if not exist "%CA_CER%" (
-  echo [!!] The certificate was not generated: %CA_CER%
-  exit /b 1
-)
+:fail
+set "CODE=1"
 
-rem Look up by thumbprint in both user and machine stores: the CA may have been regenerated
-powershell -NoProfile -Command "$t = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 $env:CA_CER).Thumbprint; foreach ($loc in 'CurrentUser','LocalMachine') { $s = New-Object Security.Cryptography.X509Certificates.X509Store 'Root', $loc; $s.Open('ReadOnly'); $found = $s.Certificates.Find('FindByThumbprint', $t, $false).Count; $s.Close(); if ($found) { exit 0 } }; exit 1"
-if not errorlevel 1 (
-  echo [ok] The mitmproxy certificate is already trusted.
-  goto :done
-)
+:end
+rem Started by a double-click: keep the window open, so the result can be read
+call :double_clicked && pause
+exit /b %CODE%
 
-echo [..] Adding the certificate to Trusted Root Certification Authorities (current user).
-echo      Windows will show a security warning - answer "Yes".
-certutil -user -addstore Root "%CA_CER%" >nul
-if errorlevel 1 (
-  echo [!!] Failed to add the certificate. To add it manually, open %CA_CER%
-  exit /b 1
-)
-echo [ok] Certificate installed. Restart browsers that are already open.
-
-:done
-echo.
-echo Done. To start the proxy and a browser through it: gremlin browser run
-exit /b 0
+:double_clicked
+rem The first ancestor that is not cmd.exe is Explorer: the window closes as soon as the script ends.
+rem From cmd, PowerShell or VS Code it is not, and the console stays open anyway.
+powershell -NoProfile -Command "$p = $PID; do { $p = (Get-CimInstance Win32_Process -Filter ('ProcessId=' + $p)).ParentProcessId; $n = (Get-Process -Id $p -ErrorAction SilentlyContinue).Name } while ($n -eq 'cmd'); if ($n -eq 'explorer') { exit 0 } else { exit 1 }" >nul 2>nul

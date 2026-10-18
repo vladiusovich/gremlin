@@ -2,7 +2,7 @@
 
 *Feed it rules, watch your app break.*
 
-A local Windows tool that sits between your app and its API and breaks chosen requests on purpose: to see how the UI copes with errors and odd data, and how the server copes with requests the UI would never send. No changes to the backend or the app code: you describe what to break in a JSON rules file.
+A local tool for Windows and Linux that sits between your app and its API and breaks chosen requests on purpose: to see how the UI copes with errors and odd data, and how the server copes with requests the UI would never send. No changes to the backend or the app code: you describe what to break in a JSON rules file.
 
 For each matching request a rule can:
 
@@ -33,7 +33,7 @@ Contents:
 - [2. Create a profile](#2-create-a-profile)
 - [3. Create the rules file for the profile](#3-create-the-rules-file-for-the-profile)
 - [4. Run](#4-run)
-- [Consoles](#consoles): cmd, PowerShell, VS Code, Git Bash
+- [Consoles](#consoles): cmd, PowerShell, VS Code, Git Bash, Linux terminals
 - [Several profiles and rule sets](#several-profiles-and-rule-sets)
 - [Phones (Android, iOS)](#phones-android-ios): mobile and Capacitor apps through WireGuard
 - Reference: [Settings profiles](#settings-profiles) · [Command-line options](#command-line-options) · [Rules](#rules) · [Troubleshooting](#troubleshooting)
@@ -41,11 +41,28 @@ Contents:
 
 ## 1. Install
 
-Requirements: Windows 10/11, Google Chrome or Microsoft Edge. For phones also the WireGuard app on the phone, see [Phones](#phones-android-ios).
+Requirements:
 
-Double-click `install.bat` in the project folder (or run `gremlin install` from a console). It installs mitmproxy and adds its certificate to the trusted ones, so the browser accepts HTTPS through the proxy. When Windows asks whether to install the certificate, answer **Yes**. No admin rights are needed. You only do this once; running it again does no harm.
+- **Windows 10/11** or **Linux** with a desktop (Ubuntu, Debian, Fedora, Arch, openSUSE, …). macOS is not supported;
+- Google Chrome, Microsoft Edge or (on Linux) Chromium;
+- Python 3.10+ and mitmproxy: the installer checks for them and offers to install what is missing;
+- for phones also the WireGuard app on the phone, see [Phones](#phones-android-ios).
 
-> ⚠️ The certificate's private key in `%USERPROFILE%\.mitmproxy\` allows decrypting your HTTPS traffic. Do not share it. See [Uninstall](#uninstall) to remove it.
+**Windows:** double-click `install.bat` in the project folder (or run `gremlin install` from a console).
+
+**Linux:** run `./install.sh` in a terminal in the project folder (or `./gremlin install`).
+
+The installer:
+
+1. Checks for **Python 3.10+**. If there is none, it asks and installs it: with `winget` on Windows (for the current user, no admin rights), with the package manager on Linux (`apt-get`, `dnf`, `pacman` or `zypper`, asks for the `sudo` password; with `apt-get` it runs `apt-get update` first, a new system has an empty package list).
+2. Checks for **mitmproxy**. If there is none, it asks and installs it: with `winget` on Windows, with `pipx` on Linux, otherwise into its own virtual environment (`%LOCALAPPDATA%\gremlin\mitmproxy` / `~/.local/share/gremlin/mitmproxy`).
+3. Makes the browser **trust the mitmproxy certificate**, so it accepts HTTPS through the proxy:
+   - Windows: adds it to the current user's trusted certificates. When Windows asks whether to install the certificate, answer **Yes**. No admin rights are needed;
+   - Linux: adds it to the certificate database of Chrome / Chromium / Edge (`~/.pki/nssdb`, no `sudo`). This needs `certutil`: if it is missing, the installer offers to install it (`libnss3-tools` / `nss-tools` / `nss`). Then it asks whether to trust the certificate **system-wide** too, for curl and other command-line tools (needs `sudo`, optional).
+
+Questions are `[Y/n]`, where `Enter` means yes (the Python question in `install.bat` is `[Y,N]`: press `Y` or `N`). `-y` (`install.bat -y`, `./install.sh -y`) answers yes to all of them. You only do this once; running it again does no harm, steps already done are skipped.
+
+> ⚠️ The certificate's private key in `%USERPROFILE%\.mitmproxy\` (Linux: `~/.mitmproxy/`) allows decrypting your HTTPS traffic. Do not share it. See [Uninstall](#uninstall) to remove it.
 
 ## 2. Create a profile
 
@@ -59,7 +76,7 @@ The file name is the profile name: `env\staging.env` is the profile `staging`.
 
 1. Open the `env` folder.
 2. Copy `example.env` (`Ctrl+C`, `Ctrl+V`) and rename the copy to the profile name, e.g. `staging.env`. Use Latin letters, digits, `-` and `_`, no spaces.
-3. Open it in Notepad (*right click → Open with → Notepad*) and set the two main lines:
+3. Open it in a text editor (Windows: *right click → Open with → Notepad*) and set the two main lines:
 
    ```ini
    # Site to open in the browser
@@ -80,8 +97,8 @@ The file name is the profile name: `env\staging.env` is the profile `staging`.
 The profile and the rules file are linked **by the exact file name** in `MITM_RULES`: `MITM_RULES=rules/staging.json` means the file `rules\staging.json`. If the name does not match (a typo, a different extension, `.json.txt`), the script stops with `Rules file not found: …` and shows the path it looked for.
 
 1. Open the `rules` folder.
-2. Create the file named exactly as in `MITM_RULES`, e.g. `staging.json`: *right click → New → Text Document*, then rename it including the extension.
-3. Open it in Notepad and describe the requests to intercept. A file with one rule:
+2. Create the file named exactly as in `MITM_RULES`, e.g. `staging.json` (Windows: *right click → New → Text Document*, then rename it including the extension).
+3. Open it in a text editor and describe the requests to intercept. A file with one rule:
 
    ```json
    [
@@ -130,19 +147,19 @@ You can edit and save the rules file while everything is running: changes apply 
 
 ## 4. Run
 
-Open a console in the project folder: click the Explorer address bar, type `cmd` and press `Enter`. Then run the profile by its name, without `.env`:
+Open a console in the project folder (Windows: click the Explorer address bar, type `cmd` and press `Enter`; Linux: open a terminal and `cd` to the folder). Then run the profile by its name, without `.env`:
 
 ```bat
 gremlin browser run -e staging
 ```
 
-For the `default` profile it is just `gremlin browser run`.
+On Linux the same command is `./gremlin browser run -e staging`. For the `default` profile it is just `gremlin browser run`.
 
 > In PowerShell (e.g. the VS Code terminal) type `.\gremlin browser run -e staging`, in Git Bash `./gremlin.bat browser run -e staging`. Details: [Consoles](#consoles). `gremlin` without arguments lists all commands.
 
 Two windows open:
 
-- **`mitmproxy :8080`**, the proxy window with the log. Check its first lines: `Loaded 1 rule(s) from …\rules\staging.json` confirms that the right rules file is used. Every intercepted request appears here as `MOCK 500 POST https://…  [rule #1 "Order creation fails"]` (or `MODIFY REQ …` / `MODIFY RESP …` for rules that change the request or the response).
+- **`mitmproxy :8080`**, the proxy window with the log: a new console window on Windows, a new terminal window on Linux. Check its first lines: `Loaded 1 rule(s) from …\rules\staging.json` confirms that the right rules file is used. Every intercepted request appears here as `MOCK 500 POST https://…  [rule #1 "Order creation fails"]` (or `MODIFY REQ …` / `MODIFY RESP …` for rules that change the request or the response).
 - **A separate browser window** with the site from `MITM_URL`. Only this window goes through the proxy; your regular browser works as usual. Test in this window.
 
 Now do the action in the app (e.g. create an order) and check how the UI handles the error.
@@ -155,7 +172,7 @@ Now do the action in the app (e.g. create an order) and check how the UI handles
 
 ## Consoles
 
-`gremlin` is a batch file (`gremlin.bat`), so it runs in any Windows console, but each one calls it a little differently. Always open the console **in the project folder** (or `cd` there first).
+On Windows `gremlin` is a batch file (`gremlin.bat`), so it runs in any Windows console, but each one calls it a little differently. On Linux it is a shell script (`gremlin`). Both start the same Python code in `lib/`. Always open the console **in the project folder** (or `cd` there first).
 
 | Console | How to open it in the project folder | Command |
 | --- | --- | --- |
@@ -164,8 +181,10 @@ Now do the action in the app (e.g. create an order) and check how the UI handles
 | Windows Terminal | Right click in the folder → *Open in Terminal* (opens PowerShell by default) | `.\gremlin browser run -e staging` |
 | VS Code terminal | *Terminal → New Terminal* (PowerShell by default; switch with the `+ ˅` menu → *Command Prompt*) | PowerShell: `.\gremlin browser run -e staging`, cmd: `gremlin browser run -e staging` |
 | Git Bash | Right click in the folder → *Open Git Bash here* | `./gremlin.bat browser run -e staging` |
+| Linux (bash, zsh, …) | A terminal, then `cd` to the project folder | `./gremlin browser run -e staging` |
 
-- **Why `.\` in PowerShell**: PowerShell never runs programs from the current folder by name alone, so `gremlin` alone gives *"The term 'gremlin' is not recognized"*. `.\gremlin` means "the one in this folder". Git Bash is the same, and also needs the `.bat` extension.
+- **Why `.\` in PowerShell and `./` on Linux**: PowerShell and Linux shells never run programs from the current folder by name alone, so `gremlin` alone gives *"The term 'gremlin' is not recognized"* / *"command not found"*. `.\gremlin` / `./gremlin` means "the one in this folder". Git Bash is the same, and also needs the `.bat` extension.
+- **Linux: the proxy window** is opened in the first terminal emulator found: `$TERMINAL` (called as `$TERMINAL -e …`), then GNOME Terminal, Ptyxis, Konsole, Xfce Terminal, GNOME Console, kitty, Alacritty, WezTerm, foot, `x-terminal-emulator`, xterm. Without a desktop session (e.g. over SSH) there is no window to open: run `./gremlin proxy run` in one terminal and `./gremlin browser run` in another.
 - **Double-click** works only for `install.bat`. `gremlin.bat` needs a command, so a double-click just shows the help and closes the window.
 - **Paths**: `-r rules\trade.json` works in cmd and PowerShell; in Git Bash use forward slashes (`-r rules/trade.json`) or quotes, because `\` is an escape character there.
 - **Stopping**: `Ctrl+C` stops `gremlin proxy run` in any console. cmd may ask `Terminate batch job (Y/N)?`: answer `Y`.
@@ -179,6 +198,7 @@ A URL with `&` (e.g. `https://app.example.com/?a=1&b=2`) needs care, because `&`
 | cmd | In double quotes: `gremlin browser run "https://app.example.com/?a=1&b=2"` |
 | PowerShell | PowerShell drops the quotes before cmd sees them, so add a second pair: `.\gremlin browser run '"https://app.example.com/?a=1&b=2"'`, or stop PowerShell parsing with `--%`: `.\gremlin --% browser run "https://app.example.com/?a=1&b=2"` |
 | Git Bash | There is no reliable way to pass it on the command line: put the URL in a profile |
+| Linux | In single or double quotes: `./gremlin browser run 'https://app.example.com/?a=1&b=2'` |
 
 The way that works everywhere: put the URL into a profile as `MITM_URL=https://app.example.com/?a=1&b=2` (no quotes) and run `gremlin browser run -e <profile>`. URLs without `&` (with `?`, `=`, `%20`, …) can be passed in double quotes in any console.
 
@@ -217,14 +237,16 @@ This is `gremlin proxy run` plus WireGuard on UDP port `51820`, started as mitmw
 
 ### One-time setup
 
-The WireGuard keys are saved in `%USERPROFILE%\.mitmproxy\wireguard.conf` on the first start, so the phone is set up once and keeps working across restarts.
+The WireGuard keys are saved in `%USERPROFILE%\.mitmproxy\wireguard.conf` (Linux: `~/.mitmproxy/wireguard.conf`) on the first start, so the phone is set up once and keeps working across restarts.
 
-1. **Network.** The phone and the computer must be on the same Wi-Fi (or the computer on a cable in the same network). Guest and some office networks block devices from seeing each other: use another network or the phone's hotspot. In Windows the network must be *Private* (*Settings → Network & internet → Wi-Fi → the network → Private network*).
+1. **Network.** The phone and the computer must be on the same Wi-Fi (or the computer on a cable in the same network). Guest and some office networks block devices from seeing each other: use another network or the phone's hotspot. In Windows the network must be *Private* (*Settings → Network & internet → Wi-Fi → the network → Private network*). WSL does not work for this: the phone cannot reach a WSL machine behind Windows' NAT, run gremlin on Windows itself.
 2. **Firewall.** On the first `gremlin mobile run` Windows asks whether `mitmweb.exe` may use the network: tick *Private networks* and click *Allow*. If the dialog was dismissed, allow the port from an admin console:
 
    ```bat
    netsh advfirewall firewall add rule name="gremlin WireGuard" dir=in action=allow protocol=UDP localport=51820
    ```
+
+   On Linux nothing is needed unless a firewall is on; then allow the port: `sudo ufw allow 51820/udp` (Ubuntu) or `sudo firewall-cmd --add-port=51820/udp` (Fedora).
 
 3. **Tunnel.** Run `gremlin mobile run`. mitmweb opens in the browser: go to the *Capture* tab, the *WireGuard* section shows a QR code. On the phone install **WireGuard** (Google Play / App Store), tap *+* → *Scan from QR code*, name the tunnel `gremlin` and allow the VPN.
 4. **Certificate.** Turn the tunnel on and open **<http://mitm.it>** in the phone's browser (the page is served by the proxy, so it opens only through the tunnel).
@@ -280,7 +302,7 @@ If the app already has a `network_security_config.xml` (e.g. to allow `http://` 
 ### Emulators
 
 - **Android emulator:** works the same way: install WireGuard in the emulator and add the tunnel from the QR code (or *Import from file* with the config that is also printed in the console). The computer is reachable from the emulator as `10.0.2.2`: if the tunnel does not connect, edit the tunnel's *Endpoint* to `10.0.2.2:51820`. A simpler alternative without WireGuard: start the emulator with `emulator -avd <name> -http-proxy 127.0.0.1:8080` next to `gremlin proxy run`. The certificate and the `network_security_config` are needed in both cases.
-- **iOS simulator:** runs only on macOS, and gremlin's scripts are Windows-only. The simulator has no VPN and uses the Mac's network settings, so on a Mac run `mitmweb -s addons/mock_errors.py --set rules_file=rules/rules.json`, set the Mac's HTTP/HTTPS proxy to `127.0.0.1:8080`, and drag `~/.mitmproxy/mitmproxy-ca-cert.pem` onto the simulator, then trust it as in step 4.
+- **iOS simulator:** runs only on macOS, and gremlin supports only Windows and Linux. The simulator has no VPN and uses the Mac's network settings, so on a Mac run `mitmweb -s addons/mock_errors.py --set rules_file=rules/rules.json`, set the Mac's HTTP/HTTPS proxy to `127.0.0.1:8080`, and drag `~/.mitmproxy/mitmproxy-ca-cert.pem` onto the simulator, then trust it as in step 4.
 
 ---
 
@@ -291,7 +313,7 @@ A profile is an `env/<name>.env` file. `env/default.env` is loaded when no `-e` 
 | Key | Required | Default | Allowed values |
 | --- | --- | --- | --- |
 | `MITM_URL` | optional | `http://localhost:3001/` | Start page, must start with `http://` or `https://` |
-| `MITM_BROWSER` | optional | `chrome` | `chrome`, `edge` or a full path to a Chromium-based browser exe |
+| `MITM_BROWSER` | optional | `chrome` | `chrome`, `edge`, `chromium` (Linux) or a full path to a Chromium-based browser executable. On Linux `chrome` falls back to Chromium if Google Chrome is not installed |
 | `MITM_PORT` | optional | `8080` | Proxy port, `1`-`65535` |
 | `MITM_RULES` | optional | `rules/rules.json` | Rules file; a relative path is resolved against the project root. The default file is created if missing, any other file must exist |
 | `MITM_WEB` | optional | `0` | `1` = run mitmweb (traffic UI at <http://127.0.0.1:8081>) instead of mitmdump |
@@ -302,7 +324,7 @@ A profile is an `env/<name>.env` file. `env/default.env` is loaded when no `-e` 
 Booleans accept `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`.
 
 - **Priority: command-line options > profile > built-in defaults.**
-- Format: `KEY=VALUE`, no spaces around `=`, `#` starts a comment line (trailing comments are not supported).
+- Format: `KEY=VALUE`, `#` starts a comment line (trailing comments are not supported). An empty value (`MITM_PORT=`) counts as not set.
 - Validation: an unknown key (a typo like `MITM_PROT`) is skipped with a `[warn]` listing the allowed keys, so a profile cannot override system variables such as `PATH` either. An invalid value (`MITM_PORT=abc`, `MITM_WEB=maybe`, a URL without scheme, a browser that does not exist) stops the script with an `[!!]` error that names the setting.
 - `env/example.env` is the shared template with all keys; your own profiles are ignored by git.
 
@@ -322,7 +344,7 @@ gremlin browser run [URL] [options]
 | --- | --- | --- | --- |
 | `URL` | `MITM_URL` | `http://localhost:3001/` | Start page |
 | `-e`, `--env` | | `env/default.env`, if present | Profile `env/<name>.env` |
-| `-b`, `--browser` | `MITM_BROWSER` | `chrome` | `chrome`, `edge` or a full path to a Chromium-based browser exe |
+| `-b`, `--browser` | `MITM_BROWSER` | `chrome` | `chrome`, `edge`, `chromium` (Linux) or a full path to a Chromium-based browser executable |
 | `-p`, `--port` | `MITM_PORT` | `8080` | Proxy port |
 | `-r`, `--rules` | `MITM_RULES` | `rules\rules.json` | Rules file (a relative path is resolved against the current folder) |
 | `-w`, `--web` | `MITM_WEB` | off | Start the proxy as **mitmweb**: a web UI with all traffic at <http://127.0.0.1:8081> |
@@ -361,7 +383,7 @@ It uses the `MITM_PORT`, `MITM_RULES`, `MITM_WEB`, `MITM_WIREGUARD` and `MITM_WG
 curl -x http://127.0.0.1:8080 https://app.example.com/api/v2/trade
 ```
 
-For Postman, set the proxy to `127.0.0.1:8080` in *Settings → Proxy*. Any client that uses the Windows certificate store trusts the proxy after `gremlin install`. For other clients, point them to `%USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.pem`.
+For Postman, set the proxy to `127.0.0.1:8080` in *Settings → Proxy*. On Windows any client that uses the Windows certificate store trusts the proxy after `gremlin install`; on Linux curl and other tools that use the system store do so if you agreed to the system-wide step of `./gremlin install`. For other clients, point them to `%USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.pem` (Linux: `~/.mitmproxy/mitmproxy-ca-cert.pem`).
 
 ### `gremlin mobile run`: proxy + WireGuard for phones
 
@@ -371,13 +393,20 @@ The same as `gremlin proxy run -g -w`: the proxy with a WireGuard server, starte
 gremlin mobile run [-e profile] [-p PORT] [-r rules.json] [--wg-port PORT] [--dry-run]
 ```
 
-### `gremlin install` (`install.bat`)
+### `gremlin install` (`install.bat`, `install.sh`)
 
-No options. Steps:
+```text
+gremlin install [-y]
+```
 
-1. Finds mitmproxy, or installs it via `winget` (falls back to `pip install --user mitmproxy`).
-2. Generates the mitmproxy root certificate (`%USERPROFILE%\.mitmproxy\`) if it does not exist yet.
-3. Adds this certificate to the current user's *Trusted Root Certification Authorities*, unless it is already trusted.
+`-y`, `--yes` answers yes to every question. Without a console to answer in (e.g. input from a pipe), every question is answered no. Steps, each skipped if already done:
+
+1. Finds Python 3.10+, or asks and installs it: `winget install Python.Python.3.12 --scope user` on Windows, the package manager on Linux (`python3` and `python3-venv` with `apt-get`, after `apt-get update`; `python3` with `dnf` / `zypper`, `python` with `pacman`). This step is in `install.bat` / `install.sh`, which need no Python; the steps below are in Python (`lib/gremlin_cli/install.py`).
+2. Finds mitmproxy, or asks and installs it: `winget` on Windows, `pipx` on Linux; if that is unavailable or fails, `pip` into a virtual environment of its own (`%LOCALAPPDATA%\gremlin\mitmproxy`, `~/.local/share/gremlin/mitmproxy`).
+3. Generates the mitmproxy root certificate (`%USERPROFILE%\.mitmproxy\`, `~/.mitmproxy/`) if it does not exist yet.
+4. Trusts the certificate:
+   - Windows: adds it to the current user's *Trusted Root Certification Authorities*;
+   - Linux: adds it to the NSS database of Chromium-based browsers, `~/.pki/nssdb` (and `~/snap/chromium/current/.pki/nssdb` for Chromium from snap; if snap Chromium was never started, that folder does not exist yet and the installer asks to start it once and run again), replacing an older mitmproxy certificate there. Needs `certutil`: asks to install `libnss3-tools` / `nss-tools` / `nss` / `mozilla-nss-tools` if it is missing. Then asks whether to add it to the system store as well (`/usr/local/share/ca-certificates` + `update-ca-certificates` on Debian / Ubuntu, `/etc/pki/ca-trust/source/anchors` + `update-ca-trust` on Fedora, and the like), needs `sudo`.
 
 ## Rules
 
@@ -486,9 +515,16 @@ Problems found while the proxy is starting are printed as warnings rather than e
 | A rule is missing from `Loaded N rule(s)` | It is invalid and was skipped; the reason is logged just above the summary |
 | `mitmdump not found` | Run `gremlin install` |
 | `Profile not found: env\<name>.env` | The `-e` name must match a file in `env/` (without `.env`) |
-| `[warn] …: unknown key "…" skipped` | A typo in a profile key, or spaces around `=`. The message lists the allowed keys |
+| `[warn] …: unknown key "…" skipped` | A typo in a profile key. The message lists the allowed keys |
 | `[!!] Invalid port / Invalid value / Invalid URL / Browser … not found` | An invalid value in the profile or in an option; the message names the setting and the allowed values |
-| `'gremlin' is not recognized …` / `The term 'gremlin' is not recognized …` | The console is not in the project folder, or it is PowerShell / Git Bash, which need `.\gremlin` / `./gremlin.bat`. See [Consoles](#consoles) |
+| `'gremlin' is not recognized …` / `The term 'gremlin' is not recognized …` / `gremlin: command not found` | The console is not in the project folder, or it is PowerShell / Git Bash / Linux, which need `.\gremlin` / `./gremlin.bat` / `./gremlin`. See [Consoles](#consoles) |
+| `[!!] Python 3.10+ not found` | Run `install.bat` (Windows) or `./install.sh` (Linux): it installs Python |
+| Linux: `Permission denied` for `./gremlin` or `./install.sh` | The files lost the executable bit (e.g. copied from a Windows share or a zip): `chmod +x gremlin install.sh`, or run them as `sh gremlin …` / `sh install.sh` |
+| Linux: `[!!] No terminal emulator could open the proxy window` | Every terminal found failed to start; the message shows each one's error (e.g. zutty without the `xfonts-base` package: `No suitable files for '9x18' found`). Install the missing package or another terminal (`sudo apt-get install xterm`), or set `TERMINAL` to a working one |
+| Linux: the proxy window opens, its title is `mitmproxy :8080`, but it stays empty | The terminal cannot draw (seen with zutty under WSLg, which has no GPU acceleration); the proxy itself works. Use another terminal: `TERMINAL=xterm ./gremlin browser run` |
+| Linux: `[!!] No graphical session` / `No terminal emulator found` | `gremlin browser run` cannot open a window for the proxy: run `./gremlin proxy run` in one terminal and `./gremlin browser run` in another, or set `TERMINAL` to your terminal emulator. See [Consoles](#consoles) |
+| Linux: the browser shows certificate errors after `./gremlin install` | `certutil` was missing and was not installed (the installer warns about it), or the browser was open during the install: restart it. Chromium from snap (Ubuntu) that was never started has no certificate database yet: start it once, close it and run `./gremlin install` again (the installer warns about it). Chromium from Flatpak keeps its own certificate database and is not covered: use `-k` |
+| Linux: `Failed to create a virtual environment` | Debian / Ubuntu ship Python without `venv`: `sudo apt-get install python3-venv` (the installer offers it) |
 | `Invalid URL "1"` and `'…' is not recognized as an internal or external command` | The URL contains `&` and the console did not keep it quoted. See [URLs with `&`](#urls-with-) |
 | `[!!] A proxy with other rules is already running on port …` | A proxy started with another profile or `-r` is still running on this port. Stop it (`Ctrl+C` in its window) and run again, or use another `-p` / `MITM_PORT` |
 | `[!!] Port … is used by …, not by the gremlin proxy` | Another program listens on the port: close it or use another `-p` / `MITM_PORT` |
@@ -517,17 +553,19 @@ Problems found while the proxy is starting are printed as warnings rather than e
                    (server not asked)    changed response ◄──┘
 ```
 
-1. `gremlin browser run` reads the profile, starts `gremlin proxy run` in a separate window if nothing listens on the port yet, and waits for the proxy to come up. To tell whether the port is taken it checks the listening sockets (`lib/port-owner.ps1`), not a test connection, and it recognizes a gremlin proxy and its rules file by the `rules_file=` in the process command line.
-2. `gremlin proxy run` runs mitmdump (or mitmweb) with every addon from `addons/` and the rules file.
-3. The browser is started with a **separate profile** in `%TEMP%\mitm-profile-<browser>-<port>` and the flags:
+1. `gremlin.bat` (Windows) and `gremlin` (Linux) only find Python and run `lib/main.py`; the commands themselves are the same Python code on both platforms (`lib/gremlin_cli/`, standard library only).
+2. `gremlin browser run` reads the profile, starts `gremlin proxy run` in a separate window if nothing listens on the port yet (a new console with `cmd /k` on Windows, a terminal emulator on Linux), and waits for the proxy to come up. To tell whether the port is taken it checks the listening sockets, not a test connection (`lib/port-owner.ps1` on Windows, `/proc/net/tcp` on Linux), and it recognizes a gremlin proxy and its rules file by the `rules_file=` in the process command line.
+3. `gremlin proxy run` runs mitmdump (or mitmweb) with every addon from `addons/` and the rules file.
+4. The browser is started with a **separate profile** in `%TEMP%\mitm-profile-<browser>-<port>` (Linux: `/tmp/mitm-profile-<browser>-<port>`) and the flags:
    - `--proxy-server=127.0.0.1:<port>`: all HTTP/HTTPS traffic goes through the proxy;
    - `--proxy-bypass-list="<-loopback>"`: by default Chrome never proxies `localhost`; this removes that exception, so a local dev server is intercepted too;
-   - `--disable-quic`: HTTP/3 runs over UDP and could bypass the proxy, so it is turned off.
+   - `--disable-quic`: HTTP/3 runs over UDP and could bypass the proxy, so it is turned off;
+   - Linux only, `--password-store=basic`: a new profile would otherwise ask to unlock the desktop keyring.
 
-   The separate profile is required: if the regular browser is already open, a new launch only opens a tab in it and ignores the flags. It also keeps your main profile clean. Cookies and logins in the dedicated profile survive between runs; each browser and port pair has its own profile, so several setups can run side by side.
-4. For HTTPS, mitmproxy decrypts the traffic with its own certificate, which is why `gremlin install` makes Windows trust it.
-5. For every request `mock_errors.py` checks the rules top to bottom, and the first match decides. With `mock` it produces a fake response (or a delay/timeout/dropped connection), and the request never reaches the server. With `request` it changes the request and sends it on; with `response` it remembers the rule and changes the server's answer when it arrives (the `response` hook of mitmproxy). Compressed bodies are decompressed and compressed back, `Content-Length` is updated. Requests without a match pass through unchanged.
-6. For phones, `gremlin mobile run` starts mitmproxy with two modes: `--mode regular` (the usual proxy on `MITM_PORT`) and `--mode wireguard@51820`. The phone's WireGuard app sends all its traffic to the computer through an encrypted UDP tunnel, mitmproxy takes it out of the tunnel and handles it like any other request. The phone needs nothing else configured, and apps that ignore the system proxy are covered too.
+   The separate profile is required: if the regular browser is already open, a new launch only opens a tab in it and ignores the flags. It also keeps your main profile clean. Cookies and logins in the dedicated profile survive between runs (on Linux until a reboot clears `/tmp`); each browser and port pair has its own profile, so several setups can run side by side.
+5. For HTTPS, mitmproxy decrypts the traffic with its own certificate, which is why `gremlin install` makes the browser trust it: the Windows certificate store, or on Linux the NSS database that Chromium-based browsers use.
+6. For every request `mock_errors.py` checks the rules top to bottom, and the first match decides. With `mock` it produces a fake response (or a delay/timeout/dropped connection), and the request never reaches the server. With `request` it changes the request and sends it on; with `response` it remembers the rule and changes the server's answer when it arrives (the `response` hook of mitmproxy). Compressed bodies are decompressed and compressed back, `Content-Length` is updated. Requests without a match pass through unchanged.
+7. For phones, `gremlin mobile run` starts mitmproxy with two modes: `--mode regular` (the usual proxy on `MITM_PORT`) and `--mode wireguard@51820`. The phone's WireGuard app sends all its traffic to the computer through an encrypted UDP tunnel, mitmproxy takes it out of the tunnel and handles it like any other request. The phone needs nothing else configured, and apps that ignore the system proxy are covered too.
 
 ### Why CORS headers
 
@@ -539,13 +577,11 @@ When the app and its API are on different origins, the real server adds `Access-
 gremlin/
 ├── README.md
 ├── .gitignore           # keeps personal env profiles and rule sets out of git
-├── .gitattributes       # keeps CRLF line endings in *.bat
-├── gremlin.bat          # entry point: gremlin browser run | proxy run | mobile run | install | test
-├── install.bat          # install mitmproxy and trust its certificate (gremlin install)
-├── run_tests.bat        # run the tests in .venv (gremlin test, see Tests)
-├── commands/            # the scripts behind gremlin's commands
-│   ├── browser-run.bat  # gremlin browser run: start the proxy if needed + open a browser through it
-│   └── proxy-run.bat    # gremlin proxy run / mobile run: the proxy with all addons (current console)
+├── .gitattributes       # CRLF line endings in *.bat, LF in shell scripts
+├── gremlin.bat          # entry point on Windows: gremlin browser run | proxy run | mobile run | install | test
+├── gremlin              # entry point on Linux: ./gremlin browser run | …
+├── install.bat          # Windows: Python (if missing), then gremlin install
+├── install.sh           # Linux: Python (if missing), then ./gremlin install
 ├── requirements-dev.txt # test dependencies
 ├── pytest.ini
 ├── tests/               # pytest suite
@@ -558,11 +594,21 @@ gremlin/
 ├── env/                 # settings profiles
 │   ├── example.env      # template with all keys (shared)
 │   └── <name>.env       # your profiles (personal)
-└── lib/                 # internal helpers, not meant to be run directly
-    ├── find-mitmdump.bat
-    ├── load-env.bat     # reads env/<name>.env
-    ├── port-owner.ps1   # what listens on the port: nothing, a gremlin proxy (with which rules) or another program
-    └── validate.bat     # checks port and boolean values
+└── lib/                 # the commands, run through gremlin.bat / gremlin
+    ├── main.py          # entry point of the Python part
+    ├── gremlin_cli/     # the commands, the same on Windows and Linux (standard library only)
+    │   ├── cli.py       # routes "gremlin <command>" to the modules below
+    │   ├── browser.py   # gremlin browser run: start the proxy if needed + open a browser through it
+    │   ├── proxy.py     # gremlin proxy run / mobile run: the proxy with all addons (current console)
+    │   ├── install.py   # gremlin install: mitmproxy and trust in its certificate
+    │   ├── testing.py   # gremlin test: pytest in .venv
+    │   ├── profile.py   # reads env/<name>.env
+    │   ├── ports.py     # what listens on the port: nothing, a gremlin proxy (with which rules) or another program
+    │   ├── terminal.py  # a new console / terminal window for the proxy
+    │   └── common.py    # output, options, validation, finding mitmdump
+    ├── port-owner.ps1   # Windows part of ports.py
+    ├── find-python.bat  # finds Python 3.10+ for gremlin.bat and install.bat
+    └── find-python.sh   # the same for gremlin and install.sh
 ```
 
 Everything above is in git except the personal files: `rules/*` other than `rules/README.md` and `rules/examples.json`, `env/*.env` other than `env/example.env`, and `.venv/`.
@@ -572,17 +618,18 @@ Everything above is in git except the personal files: `rules/*` other than `rule
 - **New test scenario**: add a rule to `rules/rules.json`, or create a new file in `rules/` and point `MITM_RULES` (or `-r`) to it.
 - **Sharing a scenario with the team**: add it to `rules/examples.json` (with a `name`, and pointing to `api.example.com` or another placeholder host) or paste it in the task/PR. Personal rule files are not committed.
 - **New target app**: create `env/<name>.env` from `env/example.env`.
-- **New setting**: add the key to `ENV_KEYS` in `lib/load-env.bat` and to `env/example.env`, read it in the script after the `load-env.bat` call following the `command line > profile > default` pattern used there, and validate it (see `lib/validate.bat`).
+- **New setting**: add the key to `ENV_KEYS` in `lib/gremlin_cli/profile.py` and to `env/example.env`, read it in the command (`browser.py` / `proxy.py`) following the `option or profile or default` pattern used there, and validate it (see `validate_port()` / `validate_bool()` in `common.py`).
+- **New command**: add a module to `lib/gremlin_cli/` with a `run(args) -> int` and route it in `cli.py`; `gremlin.bat` and `gremlin` pass every command on as is.
 - **New rule field**: add it to `REQUIRED_FIELDS` or `OPTIONAL_FIELDS` and validate it in `parse_rule()` in `addons/mock_errors.py`, then document it in [`rules/README.md`](rules/README.md) and [Rules](#rules).
 - **New change in `request` / `response`**: add it to `REQUEST_OPS` / `RESPONSE_OPS`, a field to `Ops`, validate it in `_parse_ops()` and apply it in `apply_ops()` in `addons/mock_errors.py`. Add an example to `rules/examples.json` (a test checks that every change has one) and document it in [`rules/README.md`](rules/README.md); `json` blocks there are validated by the tests too.
-- **New interception logic** beyond rules (logging, recording, …): drop a new [mitmproxy addon](https://docs.mitmproxy.org/stable/addons-overview/) into `addons/`. It is picked up on the next proxy start. Prefix shared helper modules with `_` so they are not loaded as addons. If the addon needs its own options, register them in `load()` (like `rules_file` in `mock_errors.py`) and pass values through `--set` in `commands/proxy-run.bat`.
-- **Another browser**: set `MITM_BROWSER` (or `-b`) to the full path of its exe (Chromium-based browsers only, because the flags are Chromium flags).
+- **New interception logic** beyond rules (logging, recording, …): drop a new [mitmproxy addon](https://docs.mitmproxy.org/stable/addons-overview/) into `addons/`. It is picked up on the next proxy start. Prefix shared helper modules with `_` so they are not loaded as addons. If the addon needs its own options, register them in `load()` (like `rules_file` in `mock_errors.py`) and pass values through `--set` in `lib/gremlin_cli/proxy.py`.
+- **Another browser**: set `MITM_BROWSER` (or `-b`) to the full path of its executable (Chromium-based browsers only, because the flags are Chromium flags).
 
 ## Tests
 
 Requires Python 3.10+. The first run creates `.venv` in the project folder and installs mitmproxy, pytest and pytest-asyncio into it (the proxy itself keeps using the mitmproxy from `gremlin install`).
 
-Run it from a console in the project folder (in PowerShell `.\gremlin test`, see [Consoles](#consoles)):
+Run it from a console in the project folder (in PowerShell `.\gremlin test`, on Linux `./gremlin test`, see [Consoles](#consoles)):
 
 ```bat
 gremlin test                          :: everything, ~1 min
@@ -592,9 +639,9 @@ gremlin test tests\test_mocking.py    :: one file
 gremlin test -x                       :: stop at the first failure
 ```
 
-Any arguments are passed to pytest as is. Once `.venv` exists, `.venv\Scripts\python -m pytest` works too.
+Any arguments are passed to pytest as is. Once `.venv` exists, `.venv\Scripts\python -m pytest` (Linux: `.venv/bin/python -m pytest`) works too. The whole suite runs on both Windows and Linux; a few tests are for one platform only and are skipped on the other.
 
-The run ends with a summary such as `340 passed in 53.85s`. On a failure pytest prints the test name and the values that did not match, and `gremlin test` exits with a non-zero code.
+The run ends with a summary such as `376 passed, 5 skipped in 53.00s` (Windows; on Linux nothing is skipped). On a failure pytest prints the test name and the values that did not match, and `gremlin test` exits with a non-zero code.
 
 | File | What it checks |
 | --- | --- |
@@ -604,11 +651,15 @@ The run ends with a summary such as `340 passed in 53.85s`. On a failure pytest 
 | `tests/test_modify.py` | Changing the request and the response: JSON Merge Patch, `json`, `body`, `query`, `headers`, `form`, `replace`, `method`, `url`, `status`, `delay`, gzip bodies, order of changes, warnings when a change does not fit the body, log lines, failures |
 | `tests/test_mocking.py` | Matching (`url` wildcards, `method`, `query`, first match wins) and the mocked response (status, body, `content_type`, `headers`, CORS, `delay`, `timeout`, `kill`, passing through on a failure) |
 | `tests/test_e2e.py` | A real mitmdump with the addon between an HTTP client and a local server: passthrough, mock without reaching the server, changed request as the server sees it (JSON, query, headers, form, method, URL), changed response (including gzip), both together, kill, timeout, delay, hot reload, broken rules do not stop the proxy, WireGuard mode next to the regular proxy |
-| `tests/test_scripts.py` | `gremlin browser run`, `gremlin proxy run` and `gremlin mobile run` via `--dry-run` in a temp copy of the project: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery, WireGuard options, reusing or refusing a proxy already on the port, routing of `gremlin` commands |
+| `tests/test_scripts.py` | `gremlin browser run`, `gremlin proxy run` and `gremlin mobile run` via `--dry-run` in a temp copy of the project, through the platform's entry point (`gremlin.bat` / `gremlin`) with fake browsers on `PATH`: profiles, priority of options, validation of ports/booleans/URL, unknown keys, addon discovery, WireGuard options, reusing or refusing a proxy already on the port, routing of `gremlin` commands including `install`, no desktop session on Linux |
+| `tests/test_install.py` | `gremlin install` on Linux: the browsers' certificate databases it writes to, including Chromium from snap, started or not |
+| `tests/test_terminal.py` | Linux: the proxy window. A terminal emulator that fails to start is skipped for the next one, the error of each is shown when none works, a terminal that hands the window over and exits counts as started, a failing proxy keeps the window open. Fake terminals, no window is opened |
 
 When adding a rule field, a change in `request` / `response` or a profile key, add a test next to the existing ones for that layer.
 
 ## Uninstall
+
+Windows:
 
 ```bat
 :: remove the trusted certificate
@@ -620,6 +671,27 @@ rmdir /s /q "%USERPROFILE%\.mitmproxy"
 for /d %d in ("%TEMP%\mitm-profile-*") do rmdir /s /q "%d"
 :: if the firewall rule for phones was added (admin console)
 netsh advfirewall firewall delete rule name="gremlin WireGuard"
+:: if mitmproxy was installed into gremlin's own virtual environment
+rmdir /s /q "%LOCALAPPDATA%\gremlin"
+```
+
+Python installed by `install.bat` is removed like any other program (*Settings → Apps*), if nothing else needs it.
+
+Linux:
+
+```sh
+# remove the certificate from the browsers' database (and from snap Chromium's, if there is one)
+certutil -d sql:$HOME/.pki/nssdb -D -n mitmproxy
+certutil -d sql:$HOME/snap/chromium/current/.pki/nssdb -D -n mitmproxy
+# if it was added system-wide: Debian / Ubuntu
+sudo rm /usr/local/share/ca-certificates/mitmproxy.crt && sudo update-ca-certificates --fresh
+# … or Fedora
+sudo rm /etc/pki/ca-trust/source/anchors/mitmproxy.pem && sudo update-ca-trust
+# remove mitmproxy (pipx, or gremlin's own virtual environment)
+pipx uninstall mitmproxy
+rm -rf ~/.local/share/gremlin
+# remove the certificate files and browser profiles
+rm -rf ~/.mitmproxy /tmp/mitm-profile-*
 ```
 
 On the phone: delete the `gremlin` tunnel in the WireGuard app and remove the mitmproxy certificate (iOS: *Settings → General → VPN & Device Management*; Android: *Encryption & credentials → User credentials*).
