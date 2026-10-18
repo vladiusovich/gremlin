@@ -72,6 +72,8 @@ def test_defaults(project):
     assert " -p 8080 " in cmd
     assert f'rules_file={project.root}\\rules\\rules.json' in cmd
     assert "An empty rules\\rules.json would be created" in out
+    assert "--mode" not in cmd
+    assert "WireGuard" not in out
     # --dry-run creates nothing
     assert not (project.root / "rules" / "rules.json").exists()
 
@@ -166,6 +168,82 @@ def test_unknown_option(project):
     code, out = project.run("proxy", "run", "--bogus")
     assert code == 1
     assert "Unknown option: --bogus" in out
+
+
+# --- WireGuard: gremlin proxy run -g / gremlin phone run --------------------
+
+@pytest.mark.parametrize("flag", ["-g", "--wireguard"])
+def test_wireguard_option(project, flag):
+    code, out = project.run("proxy", "run", flag, "--dry-run")
+    assert code == 0, out
+    cmd = command_line(out)
+    # the regular proxy keeps its port, WireGuard gets its own
+    assert " -p 8080 --mode regular --mode wireguard@51820 " in cmd
+    assert "mitmdump" in cmd.lower()
+    assert "WireGuard for phones on UDP port 51820" in out
+    assert "add -w to get it as a QR code" in out
+    assert "localport=51820" in out
+
+
+def test_phone_run_is_wireguard_in_mitmweb(project):
+    code, out = project.run("phone", "run", "--dry-run")
+    assert code == 0, out
+    cmd = command_line(out)
+    assert "mitmweb" in cmd.lower()
+    assert " --mode regular --mode wireguard@51820 " in cmd
+    assert "Capture tab" in out
+
+
+def test_phone_run_options(project):
+    (project.root / "rules" / "mobile.json").write_text("[]")
+    code, out = project.run("Phone", "Run", "-p", "9010", "--wg-port", "51999",
+                            "-r", str(project.root / "rules" / "mobile.json"), "--dry-run")
+    assert code == 0, out
+    cmd = command_line(out)
+    assert " -p 9010 --mode regular --mode wireguard@51999 " in cmd
+    assert "mobile.json" in cmd
+
+
+def test_wireguard_from_profile_and_override(project):
+    project.profile("default", "MITM_WIREGUARD=yes\nMITM_WG_PORT=51900\n")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 0, out
+    assert " --mode wireguard@51900 " in command_line(out)
+    code, out = project.run("proxy", "run", "--wg-port", "51901", "--dry-run")
+    assert code == 0, out
+    assert " --mode wireguard@51901 " in command_line(out)
+
+
+def test_wg_port_ignored_without_wireguard(project):
+    project.profile("default", "MITM_WG_PORT=51900\n")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 0, out
+    assert "--mode" not in command_line(out)
+
+
+@pytest.mark.parametrize("port", ["0", "abc", "70000"])
+def test_invalid_wg_port(project, port):
+    code, out = project.run("phone", "run", "--wg-port", port, "--dry-run")
+    assert code == 1
+    assert f'Invalid port "{port}"' in out
+    assert "--wg-port or MITM_WG_PORT" in out
+
+
+def test_invalid_wireguard_value(project):
+    project.profile("default", "MITM_WIREGUARD=maybe\n")
+    code, out = project.run("proxy", "run", "--dry-run")
+    assert code == 1
+    assert 'Invalid value MITM_WIREGUARD="maybe"' in out
+
+
+def test_run_starts_proxy_with_wireguard_from_profile(project):
+    # gremlin run passes the profile on, so the proxy it starts gets WireGuard too
+    project.profile("default", "MITM_WIREGUARD=1\n")
+    port = free_port()
+    code, out = project.run("run", "-p", str(port), "--dry-run")
+    assert code == 0, out
+    assert f" -p {port} --mode regular --mode wireguard@51820 " in command_line(out)
+    assert f"--proxy-server=127.0.0.1:{port}" in browser_line(out)
 
 
 # --- gremlin run / gremlin browser run -----------------------------------
@@ -285,10 +363,10 @@ def test_browser_unknown_option(project):
 def test_gremlin_help(project, args):
     code, out = project.run(*args)
     assert code == 1
-    assert all(c in out for c in ("gremlin run", "gremlin proxy run", "gremlin browser run"))
+    assert all(c in out for c in ("gremlin run", "gremlin proxy run", "gremlin browser run", "gremlin phone run"))
 
 
-@pytest.mark.parametrize("args", [("proxy",), ("proxy", "stop"), ("nope",)])
+@pytest.mark.parametrize("args", [("proxy",), ("proxy", "stop"), ("phone",), ("nope",)])
 def test_gremlin_unknown_command(project, args):
     code, out = project.run(*args)
     assert code == 1

@@ -12,7 +12,7 @@ rem Values are validated by the scripts that use them (lib\validate.bat).
 rem Sets ENV_FILE to the loaded file (empty if none). Invoked via `call`, hence no setlocal.
 
 rem Keep in sync with env\example.env and README.md
-set "ENV_KEYS=MITM_URL MITM_BROWSER MITM_PORT MITM_RULES MITM_WEB MITM_INSECURE"
+set "ENV_KEYS=MITM_URL MITM_BROWSER MITM_PORT MITM_RULES MITM_WEB MITM_INSECURE MITM_WIREGUARD MITM_WG_PORT"
 for %%r in ("%~dp0..") do set "ENV_ROOT=%%~fr\"
 set "ENV_FILE="
 rem Drop MITM_* inherited from a parent script, so only the chosen profile applies

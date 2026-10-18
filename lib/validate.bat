@@ -1,8 +1,9 @@
 @echo off
 rem Validates a setting value; prints an error and exits with 1 if it is invalid.
 rem
-rem   call lib\validate.bat port VALUE        1-65535
-rem   call lib\validate.bat bool NAME VALUE   empty, 1/0, true/false, yes/no, on/off
+rem   call lib\validate.bat port VALUE [WHERE]   1-65535; WHERE names the setting in the error
+rem                                              (default "-p or MITM_PORT")
+rem   call lib\validate.bat bool NAME VALUE      empty, 1/0, true/false, yes/no, on/off
 rem
 rem URLs are validated inline by the callers: passing them through `call` would
 rem re-expand %XX escapes.
@@ -15,7 +16,9 @@ if not "%V_PORT:~5%"=="" goto :port_bad
 if %V_PORT% GTR 65535 goto :port_bad
 exit /b 0
 :port_bad
-echo [!!] Invalid port "%~2": must be a number 1-65535 (option -p or MITM_PORT in the profile)
+set "V_WHERE=%~3"
+if not defined V_WHERE set "V_WHERE=-p or MITM_PORT"
+echo [!!] Invalid port "%~2": must be a number 1-65535 (option %V_WHERE% in the profile)
 exit /b 1
 
 :bool

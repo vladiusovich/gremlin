@@ -65,7 +65,7 @@ class Upstream:
 
 
 class Proxy:
-    def __init__(self, tmp_path: Path, rules):
+    def __init__(self, tmp_path: Path, rules, extra_args=()):
         self.rules_path = tmp_path / "rules.json"
         self._mtime = time.time()
         self.write_rules(rules)
@@ -77,6 +77,7 @@ class Proxy:
         self._log = open(self.log_path, "w", encoding="utf-8", errors="replace")
         self.proc = subprocess.Popen(
             [exe, "-p", str(self.port), "--listen-host", "127.0.0.1",
+             *extra_args,
              "-s", str(ROOT / "addons" / "mock_errors.py"), "--set", f"rules_file={self.rules_path}"],
             stdout=self._log, stderr=subprocess.STDOUT,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
@@ -135,8 +136,8 @@ def upstream():
 def proxy_factory(tmp_path):
     proxies = []
 
-    def start(rules):
-        p = Proxy(tmp_path, rules)
+    def start(rules, extra_args=()):
+        p = Proxy(tmp_path, rules, extra_args)
         proxies.append(p)
         return p
 
@@ -209,6 +210,24 @@ def test_hot_reload(upstream, proxy_factory):
     assert proxy.request("GET", upstream.base + "/x")[0] == 502
     proxy.write_rules([{"url": upstream.base + "/x", "error": 502, "enabled": False}])
     assert proxy.request("GET", upstream.base + "/x")[0] == 200
+
+
+def test_wireguard_mode_keeps_the_regular_proxy(upstream, proxy_factory, tmp_path):
+    # the modes "gremlin phone run" passes; confdir in tmp keeps the real ~/.mitmproxy untouched
+    wg_port = free_port()
+    proxy = proxy_factory([{"url": upstream.base + "/orders", "error": 500}],
+                          ["--mode", "regular", "--mode", f"wireguard@{wg_port}",
+                           "--set", f"confdir={tmp_path / 'confdir'}"])
+    assert proxy.request("GET", upstream.base + "/orders")[0] == 500
+    assert proxy.request("GET", upstream.base + "/real")[0] == 200
+    deadline = time.monotonic() + 10
+    while "WireGuard server listening" not in proxy.log() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    log = proxy.log()
+    assert f"WireGuard server listening at 127.0.0.1:{wg_port}" in log
+    # the client config for the phone is printed, and its keys are kept for the next run
+    assert "[Peer]" in log and f"Endpoint = 127.0.0.1:{wg_port}" in log
+    assert (tmp_path / "confdir" / "wireguard.conf").exists()
 
 
 def test_broken_rules_do_not_stop_the_proxy(upstream, proxy_factory):
