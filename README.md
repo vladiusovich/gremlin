@@ -458,8 +458,6 @@ Changes inside `request` and `response` (`null` removes a field, a parameter or 
 | `url` | ✅ | | `"http://localhost:5000/v2/quotes"`: send the request elsewhere |
 | `status` | | ✅ | `401`: the body stays real (the server **has** processed the request) |
 
-**The old format.** Rules written before `mock` existed (`"error": 500, "body": …` at the top level of a rule) still work, but the proxy window prints a warning with the exact `"mock": {…}` to write instead. See [The old format](rules/README.md#the-old-format-error).
-
 Rule files in `rules/` are **personal** and ignored by git. The shared files are [`rules/README.md`](rules/README.md), the guide, and [`rules/examples.json`](rules/examples.json), a working example of every feature.
 
 ### Tips
@@ -480,7 +478,6 @@ The rules file is validated every time it is (re)loaded, and the result is print
 | The root is not an array | Same as invalid JSON | `rules.json: the root must be a JSON array [ ... ] of rules, got object. …` |
 | A rule is invalid (missing required field, wrong type, out of range, nothing to do, `mock` together with `request` / `response`) | **Only that rule is skipped**, the others are loaded. All problems of the rule are listed, each naming the field and whether it is required or optional | `rules.json: rule #2 "typo": field 'request.json' (optional): expected an object like {"amount": -1} …` |
 | `mock` together with `request` / `response` | The rule is skipped, the message explains why the two cannot be combined | `rules.json: rule #3: incompatible: 'mock' cannot be used together with 'response' in one rule. 'mock' answers instead of the server, so the request is never sent, while 'response' changes the answer that comes back from the server. Keep either 'mock' or 'response'` |
-| The old format (`"error"` at the top level) | Warning with the exact replacement, the rule works | `rules.json: rule #1: old format: 'error', 'body' at the top level still works, but write it as "mock": {"status": 404, "body": {…}}` |
 | Unknown field (typo) | Warning with a suggestion, the field is ignored, the rule is loaded | `rules.json: rule #2: unknown field 'metod' is ignored, did you mean 'method'?` |
 | A rule that can never match or has fields without effect | Warning, the rule is loaded | `rules.json: rule #7 "dup": same method/url/query as rule #1 "ok", it will never match (first match wins)` |
 | The file is missing | Error once, nothing is mocked until the file appears | `Rules file not found: …` |
@@ -644,7 +641,7 @@ The run ends with a summary such as `376 passed, 5 skipped in 53.00s` (Windows; 
 | File | What it checks |
 | --- | --- |
 | `tests/test_parse_rule.py` | Validation of a single rule: required fields, types, ranges, defaults, warnings for typos and fields without effect |
-| `tests/test_parse_rule.py` (sections) | Validation of `request` / `response`: every change, `null` values, `replace` with regular expressions, changes from the wrong section, `mock` fields, the old top-level `error` format and its hint, `mock` combined with `request` / `response` is an error with an explanation |
+| `tests/test_parse_rule.py` (sections) | Validation of `request` / `response`: every change, `null` values, `replace` with regular expressions, changes from the wrong section, `mock` fields, `mock` fields written at the top level of a rule, `mock` combined with `request` / `response` is an error with an explanation |
 | `tests/test_rules_file.py` | Loading the rules file: invalid JSON / root keeps the previous rules, invalid rules are skipped, `enabled`, comment-only notes, duplicates, hot reload, missing file, BOM, warnings instead of errors during startup; `rules/examples.json` loads without warnings and covers every change; every `json` block in `README.md` and `rules/README.md` is a valid rule |
 | `tests/test_modify.py` | Changing the request and the response: JSON Merge Patch, `json`, `body`, `query`, `headers`, `form`, `replace`, `method`, `url`, `status`, `delay`, gzip bodies, order of changes, warnings when a change does not fit the body, log lines, failures |
 | `tests/test_mocking.py` | Matching (`url` wildcards, `method`, `query`, first match wins) and the mocked response (status, body, `content_type`, `headers`, CORS, `delay`, `timeout`, `kill`, passing through on a failure) |
