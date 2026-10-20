@@ -1,6 +1,10 @@
 # Gremlin
 
-*Feed it rules, watch your app break.*
+<p align="center">
+  <img width="360" height="200" alt="gremlin" src="https://github.com/user-attachments/assets/4ef1a9b3-c9a5-40d5-92bd-f018f21252cc" />
+</p>
+
+<p align="center"><em>Feed it rules, watch your app break.</em></p>
 
 A local tool for Windows and Linux that sits between your app and its API and breaks chosen requests on purpose: to see how the UI copes with errors and odd data, and how the server copes with requests the UI would never send. No changes to the backend or the app code: you describe what to break in a JSON rules file.
 
